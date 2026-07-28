@@ -61,12 +61,13 @@
 
     .profile-header { display: flex; align-items: center; gap: 22px; border-bottom: 1px solid var(--card-border); padding-bottom: 25px; margin-bottom: 25px; }
     .avatar-wrapper img { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 2px solid var(--kick-green); box-shadow: 0 0 20px var(--kick-green-glow); }
-    .profile-title h2 { font-size: 1.9rem; font-weight: 800; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .profile-title h2 { font-size: 1.9rem; font-weight: 800; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     
     .badge { font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 4px; }
     .verified-badge { background: var(--kick-green); color: #000; box-shadow: 0 0 10px var(--kick-green-glow); }
-    .monetized-badge-yes { background: rgba(83, 252, 24, 0.15); color: var(--kick-green); border: 1px solid var(--kick-green); }
-    .monetized-badge-no { background: rgba(255, 77, 77, 0.15); color: var(--danger-red); border: 1px solid var(--danger-red); }
+    
+    .monetized-badge-yes, .kpp-badge-yes { background: rgba(83, 252, 24, 0.15); color: var(--kick-green); border: 1px solid var(--kick-green); }
+    .monetized-badge-no, .kpp-badge-no { background: rgba(255, 77, 77, 0.15); color: var(--danger-red); border: 1px solid var(--danger-red); }
 
     .sub-meta { color: var(--text-muted); font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; margin-top: 6px; }
 
@@ -158,6 +159,7 @@
           <h2 id="currentName">-- 
             <span id="verifiedBadge" class="badge verified-badge hidden">Verified</span>
             <span id="monetizedBadge" class="badge hidden"></span>
+            <span id="kppBadge" class="badge hidden"></span>
           </h2>
           <div id="channelIds" class="sub-meta">Channel ID: -- | User ID: --</div>
         </div>
@@ -247,7 +249,7 @@
         const historyQuery = `
           SELECT 
             c.id AS channel_id, c.user_id, c.current_username, c.current_slug, 
-            c.followers_count, c.is_banned, c.verified, c.subscription_enabled, c.livestream_title, c.bio,
+            c.followers_count, c.is_banned, c.verified, c.subscription_enabled, c.vod_enabled, c.livestream_title, c.bio,
             c.instagram, c.twitter, c.youtube, c.discord, c.tiktok, c.facebook, c.profile_pic,
             h.slug AS history_slug, h.username AS history_username, h.detected_at
           FROM username_history h
@@ -281,12 +283,13 @@
         document.getElementById('currentName').childNodes[0].nodeValue = `${channel.current_username} (@${channel.current_slug}) `;
         document.getElementById('channelIds').innerText = `Channel ID: ${channelId} | User ID: ${channel.user_id || 'N/A'}`;
         
-        // Verified Badge
+        // 1. Verified Badge
+        const isVerified = Number(channel.verified) === 1;
         const verifiedBadge = document.getElementById('verifiedBadge');
-        if (Number(channel.verified) === 1) verifiedBadge.classList.remove('hidden');
+        if (isVerified) verifiedBadge.classList.remove('hidden');
         else verifiedBadge.classList.add('hidden');
 
-        // Monetized/Subscription Badge
+        // 2. Monetized Badge
         const monetizedBadge = document.getElementById('monetizedBadge');
         monetizedBadge.classList.remove('hidden', 'monetized-badge-yes', 'monetized-badge-no');
         if (Number(channel.subscription_enabled) === 1) {
@@ -297,7 +300,23 @@
           monetizedBadge.innerText = 'Monetized ✖';
         }
 
-        document.getElementById('statFollowers').innerText = Number(channel.followers_count || 0).toLocaleString();
+        // 3. KPP Badge Check (Verified == true AND Followers >= 250 AND VOD Storage == true)
+        const followersCount = Number(channel.followers_count || 0);
+        const isVodEnabled = Number(channel.vod_enabled) === 1;
+        const isKppEligible = isVerified && (followersCount >= 250) && isVodEnabled;
+
+        const kppBadge = document.getElementById('kppBadge');
+        kppBadge.classList.remove('hidden', 'kpp-badge-yes', 'kpp-badge-no');
+
+        if (isKppEligible) {
+          kppBadge.classList.add('kpp-badge-yes');
+          kppBadge.innerText = 'KPP ✔';
+        } else {
+          kppBadge.classList.add('kpp-badge-no');
+          kppBadge.innerText = 'KPP ✖';
+        }
+
+        document.getElementById('statFollowers').innerText = followersCount.toLocaleString();
         
         // Ban Status
         const isBanned = Number(channel.is_banned) === 1;

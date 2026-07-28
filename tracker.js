@@ -1,94 +1,110 @@
-const puppeteer = require('puppeteer');
-const sqlite3 = require('sqlite3').verbose();
-const fs = require('fs');
-const path = require('path');
+import puppeteer from 'puppeteer';
+import sqlite3 from 'sqlite3';
 
-const DB_PATH = path.join(__dirname, 'kick_tracker.db');
-const TARGETS_FILE = path.join(__dirname, 'targets.txt');
-const IDS_FILE = path.join(__dirname, 'ids.txt');
+const db = new sqlite3.Database('./kick_tracker.db');
 
-const db = new sqlite3.Database(DB_PATH);
-
-// Database initialization
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS channels (
-      id INTEGER PRIMARY KEY,
-      user_id INTEGER,
-      current_slug TEXT NOT NULL,
-      current_username TEXT NOT NULL,
-      followers_count INTEGER,
-      is_banned INTEGER,
-      verified INTEGER,
-      subscription_enabled INTEGER DEFAULT 0,
-      livestream_title TEXT,
-      bio TEXT,
-      instagram TEXT,
-      twitter TEXT,
-      youtube TEXT,
-      discord TEXT,
-      tiktok TEXT,
-      facebook TEXT,
-      profile_pic TEXT,
-      raw_payload TEXT,
-      last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  const columns = [
-    { name: 'bio', type: 'TEXT' },
-    { name: 'instagram', type: 'TEXT' },
-    { name: 'twitter', type: 'TEXT' },
-    { name: 'youtube', type: 'TEXT' },
-    { name: 'discord', type: 'TEXT' },
-    { name: 'tiktok', type: 'TEXT' },
-    { name: 'facebook', type: 'TEXT' },
-    { name: 'profile_pic', type: 'TEXT' },
-    { name: 'subscription_enabled', type: 'INTEGER DEFAULT 0' }
-  ];
-
-  columns.forEach(col => {
-    db.run(`ALTER TABLE channels ADD COLUMN ${col.name} ${col.type}`, () => {});
-  });
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS username_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id INTEGER NOT NULL,
-      slug TEXT NOT NULL,
-      username TEXT NOT NULL,
-      detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (channel_id) REFERENCES channels (id)
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS socials_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id INTEGER NOT NULL,
-      field_name TEXT NOT NULL,
-      old_value TEXT,
-      new_value TEXT,
-      detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (channel_id) REFERENCES channels (id)
-    )
-  `);
-});
-
-function runQuery(query, params = []) {
+// Promisified DB helpers
+function runQuery(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.run(query, params, function (err) {
+    db.run(sql, params, function (err) {
       if (err) reject(err);
       else resolve(this);
     });
   });
 }
 
-function getQuery(query, params = []) {
+function getQuery(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.get(query, params, (err, row) => {
+    db.get(sql, params, (err, row) => {
       if (err) reject(err);
       else resolve(row);
+    });
+  });
+}
+
+function allQuery(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+}
+
+// Database Initializer
+async function initDb() {
+  return new Promise((resolve) => {
+    db.serialize(() => {
+      // 1. Core channels table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS channels (
+          id INTEGER PRIMARY KEY,
+          user_id INTEGER,
+          current_slug TEXT UNIQUE,
+          current_username TEXT,
+          followers_count INTEGER DEFAULT 0,
+          is_banned INTEGER DEFAULT 0,
+          verified INTEGER DEFAULT 0,
+          subscription_enabled INTEGER DEFAULT 0,
+          vod_enabled INTEGER DEFAULT 0,
+          livestream_title TEXT,
+          bio TEXT,
+          instagram TEXT,
+          twitter TEXT,
+          youtube TEXT,
+          discord TEXT,
+          tiktok TEXT,
+          facebook TEXT,
+          profile_pic TEXT,
+          raw_payload TEXT,
+          last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Migration for column upgrades if table already exists
+      const columns = [
+        { name: 'bio', type: 'TEXT' },
+        { name: 'instagram', type: 'TEXT' },
+        { name: 'twitter', type: 'TEXT' },
+        { name: 'youtube', type: 'TEXT' },
+        { name: 'discord', type: 'TEXT' },
+        { name: 'tiktok', type: 'TEXT' },
+        { name: 'facebook', type: 'TEXT' },
+        { name: 'profile_pic', type: 'TEXT' },
+        { name: 'subscription_enabled', type: 'INTEGER DEFAULT 0' },
+        { name: 'vod_enabled', type: 'INTEGER DEFAULT 0' }
+      ];
+
+      columns.forEach(col => {
+        db.run(`ALTER TABLE channels ADD COLUMN ${col.name} ${col.type}`, () => {});
+      });
+
+      // 2. Historical Username Tracker Table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS username_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          channel_id INTEGER,
+          slug TEXT,
+          username TEXT,
+          detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(channel_id) REFERENCES channels(id)
+        )
+      `);
+
+      // 3. Historical Socials Tracker Table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS socials_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          channel_id INTEGER,
+          field_name TEXT,
+          old_value TEXT,
+          new_value TEXT,
+          detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(channel_id) REFERENCES channels(id)
+        )
+      `, () => {
+        resolve();
+      });
     });
   });
 }
@@ -104,7 +120,13 @@ async function processChannelPayload(data) {
   const followersCount = parseInt(data.followers_count || 0, 10);
   const isBanned = data.is_banned ? 1 : 0;
   const verified = data.verified ? 1 : 0;
+  
+  // Subscription / Monetized status check
   const subscriptionEnabled = (data.subscription_enabled || data.is_affiliate) ? 1 : 0;
+  
+  // Extract vod_enabled from data object or fallback check
+  const vodEnabled = (data.vod_enabled === true || (data.vod_enabled !== false && data.vod_enabled !== 0)) ? 1 : 0;
+
   const livestreamTitle = data.livestream ? data.livestream.session_title : null;
   const rawPayload = JSON.stringify(data);
 
@@ -123,12 +145,12 @@ async function processChannelPayload(data) {
     await runQuery(`
       INSERT INTO channels (
         id, user_id, current_slug, current_username, followers_count,
-        is_banned, verified, subscription_enabled, livestream_title, bio, instagram, twitter,
+        is_banned, verified, subscription_enabled, vod_enabled, livestream_title, bio, instagram, twitter,
         youtube, discord, tiktok, facebook, profile_pic, raw_payload
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       channelId, userId, newSlug, newUsername, followersCount,
-      isBanned, verified, subscriptionEnabled, livestreamTitle, bio, instagram, twitter,
+      isBanned, verified, subscriptionEnabled, vodEnabled, livestreamTitle, bio, instagram, twitter,
       youtube, discord, tiktok, facebook, profilePic, rawPayload
     ]);
 
@@ -139,74 +161,67 @@ async function processChannelPayload(data) {
 
     console.log(`[+] Tracked new channel: @${newSlug} (ID: ${channelId})`);
   } else {
+    // Check for username / slug changes
+    if (existing.current_slug !== newSlug || existing.current_username !== newUsername) {
+      console.log(`[!] Handle change detected for ID ${channelId}: @${existing.current_slug} -> @${newSlug}`);
+      await runQuery(`
+        INSERT INTO username_history (channel_id, slug, username)
+        VALUES (?, ?, ?)
+      `, [channelId, newSlug, newUsername]);
+    }
+
+    // Check for social profile changes
+    const socialFields = [
+      { name: 'bio', val: bio },
+      { name: 'instagram', val: instagram },
+      { name: 'twitter', val: twitter },
+      { name: 'youtube', val: youtube },
+      { name: 'discord', val: discord },
+      { name: 'tiktok', val: tiktok },
+      { name: 'facebook', val: facebook }
+    ];
+
+    for (const field of socialFields) {
+      const oldVal = existing[field.name] || "";
+      if (oldVal !== field.val) {
+        console.log(`[!] ${field.name} change for @${newSlug}: "${oldVal}" -> "${field.val}"`);
+        await runQuery(`
+          INSERT INTO socials_history (channel_id, field_name, old_value, new_value)
+          VALUES (?, ?, ?, ?)
+        `, [channelId, field.name, oldVal, field.val]);
+      }
+    }
+
     await runQuery(`
       UPDATE channels
       SET current_slug = ?, current_username = ?, followers_count = ?,
-          is_banned = ?, verified = ?, subscription_enabled = ?, livestream_title = ?, bio = ?,
+          is_banned = ?, verified = ?, subscription_enabled = ?, vod_enabled = ?, livestream_title = ?, bio = ?,
           instagram = ?, twitter = ?, youtube = ?, discord = ?,
           tiktok = ?, facebook = ?, profile_pic = ?, raw_payload = ?,
           last_updated = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
-      newSlug, newUsername, followersCount, isBanned, verified, subscriptionEnabled,
+      newSlug, newUsername, followersCount, isBanned, verified, subscriptionEnabled, vodEnabled,
       livestreamTitle, bio, instagram, twitter, youtube, discord,
       tiktok, facebook, profilePic, rawPayload, channelId
     ]);
-
-    if (existing.current_slug.toLowerCase() !== newSlug.toLowerCase()) {
-      await runQuery(`
-        INSERT INTO username_history (channel_id, slug, username)
-        VALUES (?, ?, ?)
-      `, [channelId, newSlug, newUsername]);
-      console.log(`[!] Username change detected: ${existing.current_slug} -> ${newSlug}`);
-    }
-
-    const socialFields = [
-      { name: 'bio', oldVal: existing.bio, newVal: bio },
-      { name: 'instagram', oldVal: existing.instagram, newVal: instagram },
-      { name: 'twitter', oldVal: existing.twitter, newVal: twitter },
-      { name: 'youtube', oldVal: existing.youtube, newVal: youtube },
-      { name: 'discord', oldVal: existing.discord, newVal: discord },
-      { name: 'tiktok', oldVal: existing.tiktok, newVal: tiktok },
-      { name: 'facebook', oldVal: existing.facebook, newVal: facebook }
-    ];
-
-    for (const item of socialFields) {
-      if ((item.oldVal || "") !== (item.newVal || "")) {
-        await runQuery(`
-          INSERT INTO socials_history (channel_id, field_name, old_value, new_value)
-          VALUES (?, ?, ?, ?)
-        `, [channelId, item.name, item.oldVal, item.newVal]);
-      }
-    }
   }
 
   return channelId;
 }
 
-// Read or initialize IDs file
-function getSavedIds() {
-  if (!fs.existsSync(IDS_FILE)) {
-    fs.writeFileSync(IDS_FILE, '');
-    return new Set();
-  }
-  const lines = fs.readFileSync(IDS_FILE, 'utf-8').split('\n');
-  return new Set(lines.map(l => l.trim()).filter(l => l && !l.startsWith('#')));
-}
+import fs from 'fs';
 
-function saveIds(idsSet) {
-  fs.writeFileSync(IDS_FILE, Array.from(idsSet).join('\n'));
-}
+async function main() {
+  await initDb();
 
-async function run() {
-  const savedIds = getSavedIds();
-  let targets = [];
+  const targetsFile = fs.existsSync('./targets.txt') ? fs.readFileSync('./targets.txt', 'utf8') : '';
+  const targets = targetsFile.split('\n').map(t => t.trim()).filter(t => t.length > 0);
 
-  if (fs.existsSync(TARGETS_FILE)) {
-    targets = fs.readFileSync(TARGETS_FILE, 'utf-8')
-      .split('\n')
-      .map(t => t.trim())
-      .filter(t => t && !t.startsWith('#'));
+  if (targets.length === 0) {
+    console.log("No targets found in targets.txt");
+    db.close();
+    return;
   }
 
   const browser = await puppeteer.launch({
@@ -215,43 +230,29 @@ async function run() {
   });
 
   const page = await browser.newPage();
-  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-  // Step 1: Process any new handles in targets.txt to discover their Channel IDs
-  for (const slug of targets) {
+  for (const target of targets) {
     try {
-      await page.goto(`https://kick.com/api/v2/channels/${slug}`, { waitUntil: 'networkidle2', timeout: 20000 });
+      console.log(`Fetching target: ${target}...`);
+      await page.goto(`https://kick.com/api/v1/channels/${encodeURIComponent(target)}`, { waitUntil: 'networkidle2', timeout: 15000 });
+      
       const content = await page.evaluate(() => document.body.innerText);
-      const payload = JSON.parse(content);
-      const channelId = await processChannelPayload(payload);
+      const data = JSON.parse(content);
 
-      if (channelId) {
-        savedIds.add(String(channelId));
+      if (data && data.id) {
+        await processChannelPayload(data);
+      } else {
+        console.log(`[-] Could not resolve payload for target: ${target}`);
       }
     } catch (err) {
-      console.error(`[-] Error scraping slug ${slug}:`, err.message);
-    }
-  }
-
-  // Save all discovered IDs back into ids.txt
-  saveIds(savedIds);
-
-  // Step 2: Ensure all historical IDs in ids.txt are refreshed (via DB lookup)
-  for (const idStr of savedIds) {
-    const existing = await getQuery('SELECT current_slug FROM channels WHERE id = ?', [parseInt(idStr, 10)]);
-    if (existing && existing.current_slug) {
-      try {
-        await page.goto(`https://kick.com/api/v2/channels/${existing.current_slug}`, { waitUntil: 'networkidle2', timeout: 20000 });
-        const content = await page.evaluate(() => document.body.innerText);
-        await processChannelPayload(JSON.parse(content));
-      } catch (err) {
-        console.error(`[-] Error updating channel ID ${idStr}:`, err.message);
-      }
+      console.error(`[X] Error scraping target ${target}:`, err.message);
     }
   }
 
   await browser.close();
   db.close();
+  console.log("Tracking iteration finished successfully.");
 }
 
-run();
+main();
