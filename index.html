@@ -42,6 +42,18 @@
     .search-box button:hover { transform: scale(1.03); box-shadow: 0 0 25px rgba(83, 252, 24, 0.5); }
 
     #status { text-align: center; margin-top: 18px; font-size: 0.95rem; color: var(--text-muted); min-height: 24px; }
+    
+    /* Featured Channels Grid */
+    .featured-section { margin-top: 35px; animation: fadeInUp 0.7s ease-out; }
+    .featured-title { font-size: 0.9rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 16px; }
+    .featured-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    @media (max-width: 650px) { .featured-grid { grid-template-columns: repeat(1, 1fr); } }
+
+    .featured-card { display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); border: 1px solid var(--card-border); padding: 16px 20px; border-radius: 16px; text-decoration: none; color: var(--text-main); backdrop-filter: blur(20px); transition: all 0.25s ease; cursor: pointer; }
+    .featured-card:hover { border-color: var(--kick-green); box-shadow: 0 0 20px var(--kick-green-glow); transform: translateY(-3px); }
+    .featured-name { font-weight: 700; font-size: 1rem; }
+    .featured-action { font-size: 0.8rem; font-weight: 700; color: var(--kick-green); background: rgba(83, 252, 24, 0.1); padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(83, 252, 24, 0.2); }
+
     .glass-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 24px; padding: 35px; backdrop-filter: blur(24px); box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6); margin-top: 30px; animation: cardAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
     @keyframes cardAppear { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -93,6 +105,50 @@
     </div>
     <div id="status">Initializing Database Engine...</div>
 
+    <!-- Featured Section (3x3 Grid) -->
+    <div id="featuredSection" class="featured-section">
+      <div class="featured-title">Featured Channels</div>
+      <div class="featured-grid">
+        <a class="featured-card" onclick="quickSearch('odedsvr')">
+          <span class="featured-name">@odedsvr</span>
+          <span class="featured-action">Try &rarr;</span>
+        </a>
+        <a class="featured-card" onclick="quickSearch('xqc')">
+          <span class="featured-name">@xqc</span>
+          <span class="featured-action">Try &rarr;</span>
+        </a>
+        <a class="featured-card" onclick="quickSearch('adinross')">
+          <span class="featured-name">@adinross</span>
+          <span class="featured-action">Try &rarr;</span>
+        </a>
+        <a class="featured-card" onclick="quickSearch('trainwreckstv')">
+          <span class="featured-name">@trainwreckstv</span>
+          <span class="featured-action">Try &rarr;</span>
+        </a>
+        <a class="featured-card" onclick="quickSearch('roshtein')">
+          <span class="featured-name">@roshtein</span>
+          <span class="featured-action">Try &rarr;</span>
+        </a>
+        <a class="featured-card" onclick="quickSearch('amouranth')">
+          <span class="featured-name">@amouranth</span>
+          <span class="featured-action">Try &rarr;</span>
+        </a>
+        <a class="featured-card" onclick="quickSearch('f2alon')">
+          <span class="featured-name">@f2alon</span>
+          <span class="featured-action">Try &rarr;</span>
+        </a>
+        <a class="featured-card" onclick="quickSearch('nadmoo')">
+          <span class="featured-name">@nadmoo</span>
+          <span class="featured-action">Try &rarr;</span>
+        </a>
+        <a class="featured-card" onclick="quickSearch('westcol')">
+          <span class="featured-name">@westcol</span>
+          <span class="featured-action">Try &rarr;</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Channel Details Display Card -->
     <div id="resultCard" class="glass-card hidden">
       <div class="profile-header">
         <div class="avatar-wrapper">
@@ -171,9 +227,15 @@
       }
     }
 
+    function quickSearch(handle) {
+      document.getElementById('searchInput').value = handle;
+      searchUser(handle);
+    }
+
     function searchUser(explicitQuery) {
       const statusEl = document.getElementById('status');
       const cardEl = document.getElementById('resultCard');
+      const featuredEl = document.getElementById('featuredSection');
       const inputEl = document.getElementById('searchInput');
       
       const queryHandle = (explicitQuery || inputEl.value).trim().toLowerCase();
@@ -204,10 +266,12 @@
         if (historyRows.length === 0) {
           statusEl.innerText = `No records found for handle: "${queryHandle}"`;
           cardEl.classList.add('hidden');
+          featuredEl.classList.remove('hidden');
           return;
         }
 
         statusEl.innerText = "";
+        featuredEl.classList.add('hidden');
         cardEl.classList.remove('hidden');
 
         const channel = historyRows[0];
@@ -235,7 +299,7 @@
 
         document.getElementById('statFollowers').innerText = Number(channel.followers_count || 0).toLocaleString();
         
-        // Ban Status Fix (1 = Banned, 0 = Active)
+        // Ban Status
         const isBanned = Number(channel.is_banned) === 1;
         const bannedEl = document.getElementById('statBanned');
         bannedEl.innerText = isBanned ? "Banned" : "Active";
@@ -295,7 +359,9 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('searchBtn').addEventListener('click', () => searchUser());
-      document.getElementById('searchInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') searchUser(); });
+      document.getElementById('searchInput').addEventListener('keypress', (e) => { 
+        if (e.key === 'Enter') searchUser(); 
+      });
       initDatabase();
     });
   </script>
