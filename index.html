@@ -283,16 +283,17 @@
         document.getElementById('currentName').childNodes[0].nodeValue = `${channel.current_username} (@${channel.current_slug}) `;
         document.getElementById('channelIds').innerText = `Channel ID: ${channelId} | User ID: ${channel.user_id || 'N/A'}`;
         
-        // 1. Verified Badge
-        const isVerified = Number(channel.verified) === 1;
+        // 1. Verified Badge Check
+        const isVerified = Number(channel.verified) === 1 || channel.verified === true;
         const verifiedBadge = document.getElementById('verifiedBadge');
         if (isVerified) verifiedBadge.classList.remove('hidden');
         else verifiedBadge.classList.add('hidden');
 
-        // 2. Monetized Badge
+        // 2. Monetized Badge Check
+        const isSubscriptionEnabled = Number(channel.subscription_enabled) === 1 || channel.subscription_enabled === true;
         const monetizedBadge = document.getElementById('monetizedBadge');
         monetizedBadge.classList.remove('hidden', 'monetized-badge-yes', 'monetized-badge-no');
-        if (Number(channel.subscription_enabled) === 1) {
+        if (isSubscriptionEnabled) {
           monetizedBadge.classList.add('monetized-badge-yes');
           monetizedBadge.innerText = 'Monetized ✔';
         } else {
@@ -300,9 +301,11 @@
           monetizedBadge.innerText = 'Monetized ✖';
         }
 
-        // 3. KPP Badge Check (Verified == true AND Followers >= 250 AND VOD Storage == true)
-        const followersCount = Number(channel.followers_count || 0);
-        const isVodEnabled = Number(channel.vod_enabled) === 1;
+        // 3. Robust KPP Badge Check (Handles string numbers like "55446")
+        const rawFollowers = String(channel.followers_count || '0').replace(/\D/g, '');
+        const followersCount = parseInt(rawFollowers, 10) || 0;
+        const isVodEnabled = Number(channel.vod_enabled) === 1 || channel.vod_enabled === true;
+
         const isKppEligible = isVerified && (followersCount >= 250) && isVodEnabled;
 
         const kppBadge = document.getElementById('kppBadge');
@@ -319,7 +322,7 @@
         document.getElementById('statFollowers').innerText = followersCount.toLocaleString();
         
         // Ban Status
-        const isBanned = Number(channel.is_banned) === 1;
+        const isBanned = Number(channel.is_banned) === 1 || channel.is_banned === true;
         const bannedEl = document.getElementById('statBanned');
         bannedEl.innerText = isBanned ? "Banned" : "Active";
         bannedEl.style.color = isBanned ? "var(--danger-red)" : "var(--kick-green)";
