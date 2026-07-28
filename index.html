@@ -43,16 +43,18 @@
 
     #status { text-align: center; margin-top: 18px; font-size: 0.95rem; color: var(--text-muted); min-height: 24px; }
     
-    /* Featured Channels Grid */
+    /* Featured Channels Grid with Avatars */
     .featured-section { margin-top: 35px; animation: fadeInUp 0.7s ease-out; }
     .featured-title { font-size: 0.9rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 16px; }
     .featured-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
     @media (max-width: 650px) { .featured-grid { grid-template-columns: repeat(1, 1fr); } }
 
-    .featured-card { display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); border: 1px solid var(--card-border); padding: 16px 20px; border-radius: 16px; text-decoration: none; color: var(--text-main); backdrop-filter: blur(20px); transition: all 0.25s ease; cursor: pointer; }
+    .featured-card { display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 16px; border-radius: 16px; text-decoration: none; color: var(--text-main); backdrop-filter: blur(20px); transition: all 0.25s ease; cursor: pointer; }
     .featured-card:hover { border-color: var(--kick-green); box-shadow: 0 0 20px var(--kick-green-glow); transform: translateY(-3px); }
-    .featured-name { font-weight: 700; font-size: 1rem; }
-    .featured-action { font-size: 0.8rem; font-weight: 700; color: var(--kick-green); background: rgba(83, 252, 24, 0.1); padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(83, 252, 24, 0.2); }
+    .featured-user-info { display: flex; align-items: center; gap: 12px; }
+    .featured-avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--kick-green); background: rgba(255,255,255,0.05); }
+    .featured-name { font-weight: 700; font-size: 0.95rem; }
+    .featured-action { font-size: 0.8rem; font-weight: 700; color: var(--kick-green); background: rgba(83, 252, 24, 0.1); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(83, 252, 24, 0.2); }
 
     .glass-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 24px; padding: 35px; backdrop-filter: blur(24px); box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6); margin-top: 30px; animation: cardAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
@@ -106,46 +108,11 @@
     </div>
     <div id="status">Initializing Database Engine...</div>
 
-    <!-- Featured Section (3x3 Grid) -->
+    <!-- Featured Section (3x3 Grid with Avatars) -->
     <div id="featuredSection" class="featured-section">
       <div class="featured-title">Featured Channels</div>
-      <div class="featured-grid">
-        <a class="featured-card" onclick="quickSearch('odedsvr')">
-          <span class="featured-name">@odedsvr</span>
-          <span class="featured-action">Try &rarr;</span>
-        </a>
-        <a class="featured-card" onclick="quickSearch('xqc')">
-          <span class="featured-name">@xqc</span>
-          <span class="featured-action">Try &rarr;</span>
-        </a>
-        <a class="featured-card" onclick="quickSearch('adinross')">
-          <span class="featured-name">@adinross</span>
-          <span class="featured-action">Try &rarr;</span>
-        </a>
-        <a class="featured-card" onclick="quickSearch('trainwreckstv')">
-          <span class="featured-name">@trainwreckstv</span>
-          <span class="featured-action">Try &rarr;</span>
-        </a>
-        <a class="featured-card" onclick="quickSearch('roshtein')">
-          <span class="featured-name">@roshtein</span>
-          <span class="featured-action">Try &rarr;</span>
-        </a>
-        <a class="featured-card" onclick="quickSearch('amouranth')">
-          <span class="featured-name">@amouranth</span>
-          <span class="featured-action">Try &rarr;</span>
-        </a>
-        <a class="featured-card" onclick="quickSearch('f2alon')">
-          <span class="featured-name">@f2alon</span>
-          <span class="featured-action">Try &rarr;</span>
-        </a>
-        <a class="featured-card" onclick="quickSearch('nadmoo')">
-          <span class="featured-name">@nadmoo</span>
-          <span class="featured-action">Try &rarr;</span>
-        </a>
-        <a class="featured-card" onclick="quickSearch('westcol')">
-          <span class="featured-name">@westcol</span>
-          <span class="featured-action">Try &rarr;</span>
-        </a>
+      <div class="featured-grid" id="featuredGrid">
+        <!-- Dynamically populated from SQLite database -->
       </div>
     </div>
 
@@ -193,6 +160,7 @@
 
   <script>
     let db = null;
+    const featuredHandles = ['odedsvr', 'xqc', 'adinross', 'trainwreckstv', 'roshtein', 'amouranth', 'f2alon', 'nadmoo', 'westcol'];
 
     const cursorGlow = document.getElementById('cursor-glow');
     document.addEventListener('mousemove', (e) => {
@@ -214,10 +182,44 @@
         db = new SQL.Database(new Uint8Array(buffer));
 
         statusEl.innerText = "Database ready. Search any handle above.";
+        loadFeaturedGrid();
         checkUrl();
       } catch (err) {
         statusEl.innerText = `Database Error: ${err.message}`;
       }
+    }
+
+    function loadFeaturedGrid() {
+      const grid = document.getElementById('featuredGrid');
+      grid.innerHTML = '';
+
+      featuredHandles.forEach(handle => {
+        let avatarSrc = 'https://kick.com/favicon.ico';
+        
+        if (db) {
+          try {
+            const stmt = db.prepare(`SELECT profile_pic FROM channels WHERE LOWER(current_slug) = ? OR LOWER(current_username) = ?`);
+            stmt.bind([handle, handle]);
+            if (stmt.step()) {
+              const res = stmt.getAsObject();
+              if (res.profile_pic) avatarSrc = res.profile_pic;
+            }
+            stmt.free();
+          } catch(e) {}
+        }
+
+        const card = document.createElement('a');
+        card.className = 'featured-card';
+        card.onclick = () => quickSearch(handle);
+        card.innerHTML = `
+          <div class="featured-user-info">
+            <img class="featured-avatar" src="${avatarSrc}" alt="${handle}" onerror="this.src='https://kick.com/favicon.ico'" />
+            <span class="featured-name">@${handle}</span>
+          </div>
+          <span class="featured-action">Try &rarr;</span>
+        `;
+        grid.appendChild(card);
+      });
     }
 
     function checkUrl() {
@@ -250,7 +252,7 @@
           SELECT 
             c.id AS channel_id, c.user_id, c.current_username, c.current_slug, 
             c.followers_count, c.is_banned, c.verified, c.subscription_enabled, c.vod_enabled, c.livestream_title, c.bio,
-            c.instagram, c.twitter, c.youtube, c.discord, c.tiktok, c.facebook, c.profile_pic,
+            c.instagram, c.twitter, c.youtube, c.discord, c.tiktok, c.facebook, c.profile_pic, c.raw_payload,
             h.slug AS history_slug, h.username AS history_username, h.detected_at
           FROM username_history h
           JOIN channels c ON h.channel_id = c.id
@@ -279,21 +281,27 @@
         const channel = historyRows[0];
         const channelId = channel.channel_id;
 
-        document.getElementById('avatarImg').src = channel.profile_pic || 'https://kick.com/favicon.ico';
+        // Parse Raw JSON Payload if available for 100% precision on KPP & Stats
+        let rawData = {};
+        try {
+          if (channel.raw_payload) rawData = JSON.parse(channel.raw_payload);
+        } catch(e) {}
+
+        document.getElementById('avatarImg').src = channel.profile_pic || rawData.user?.profile_pic || 'https://kick.com/favicon.ico';
         document.getElementById('currentName').childNodes[0].nodeValue = `${channel.current_username} (@${channel.current_slug}) `;
         document.getElementById('channelIds').innerText = `Channel ID: ${channelId} | User ID: ${channel.user_id || 'N/A'}`;
         
         // 1. Verified Badge Check
-        const isVerified = Number(channel.verified) === 1 || channel.verified === true;
+        const isVerified = rawData.verified !== undefined ? Boolean(rawData.verified) : (Number(channel.verified) === 1 || channel.verified === true);
         const verifiedBadge = document.getElementById('verifiedBadge');
         if (isVerified) verifiedBadge.classList.remove('hidden');
         else verifiedBadge.classList.add('hidden');
 
         // 2. Monetized Badge Check
-        const isSubscriptionEnabled = Number(channel.subscription_enabled) === 1 || channel.subscription_enabled === true;
+        const isSubEnabled = rawData.subscription_enabled !== undefined ? Boolean(rawData.subscription_enabled) : (Number(channel.subscription_enabled) === 1 || channel.subscription_enabled === true);
         const monetizedBadge = document.getElementById('monetizedBadge');
         monetizedBadge.classList.remove('hidden', 'monetized-badge-yes', 'monetized-badge-no');
-        if (isSubscriptionEnabled) {
+        if (isSubEnabled) {
           monetizedBadge.classList.add('monetized-badge-yes');
           monetizedBadge.innerText = 'Monetized ✔';
         } else {
@@ -301,12 +309,17 @@
           monetizedBadge.innerText = 'Monetized ✖';
         }
 
-        // 3. Robust KPP Badge Check (Handles string numbers like "55446")
-        const rawFollowers = String(channel.followers_count || '0').replace(/\D/g, '');
-        const followersCount = parseInt(rawFollowers, 10) || 0;
-        const isVodEnabled = Number(channel.vod_enabled) === 1 || channel.vod_enabled === true;
+        // 3. FIXED KPP Badge Check
+        const followersNum = rawData.followers_count !== undefined 
+          ? parseInt(String(rawData.followers_count).replace(/\D/g, ''), 10) || 0
+          : parseInt(String(channel.followers_count || '0').replace(/\D/g, ''), 10) || 0;
 
-        const isKppEligible = isVerified && (followersCount >= 250) && isVodEnabled;
+        const isVodEnabled = rawData.vod_enabled !== undefined 
+          ? Boolean(rawData.vod_enabled) 
+          : (Number(channel.vod_enabled) === 1 || channel.vod_enabled === true);
+
+        // KPP Qualification: Verified == true AND Followers >= 250 AND VOD Storage == true
+        const isKppEligible = isVerified && (followersNum >= 250) && isVodEnabled;
 
         const kppBadge = document.getElementById('kppBadge');
         kppBadge.classList.remove('hidden', 'kpp-badge-yes', 'kpp-badge-no');
@@ -319,10 +332,10 @@
           kppBadge.innerText = 'KPP ✖';
         }
 
-        document.getElementById('statFollowers').innerText = followersCount.toLocaleString();
+        document.getElementById('statFollowers').innerText = followersNum.toLocaleString();
         
         // Ban Status
-        const isBanned = Number(channel.is_banned) === 1 || channel.is_banned === true;
+        const isBanned = rawData.is_banned !== undefined ? Boolean(rawData.is_banned) : (Number(channel.is_banned) === 1 || channel.is_banned === true);
         const bannedEl = document.getElementById('statBanned');
         bannedEl.innerText = isBanned ? "Banned" : "Active";
         bannedEl.style.color = isBanned ? "var(--danger-red)" : "var(--kick-green)";
