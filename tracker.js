@@ -32,6 +32,12 @@ db.serialize(() => {
     )
   `);
 
+  // Ensure columns exist on old DB files
+  const columns = ['bio', 'instagram', 'twitter', 'youtube', 'discord', 'tiktok', 'facebook', 'profile_pic'];
+  columns.forEach(col => {
+    db.run(`ALTER TABLE channels ADD COLUMN ${col} TEXT`, () => {});
+  });
+
   db.run(`
     CREATE TABLE IF NOT EXISTS username_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
