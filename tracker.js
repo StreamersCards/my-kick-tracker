@@ -5,7 +5,6 @@ const path = require('path');
 
 const DB_PATH = path.join(__dirname, 'kick_tracker.db');
 
-// Helper to wrap SQLite operations in Promises
 function openDatabase() {
   return new Promise((resolve, reject) => {
     const db = new sqlite3.Database(DB_PATH, (err) => {
@@ -33,17 +32,8 @@ function getQuery(db, query, params = []) {
   });
 }
 
-function allQuery(db, query, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
-}
-
-// Initialize tables
 async function initDb(db) {
+  // Main Channel Table
   await runQuery(db, `
     CREATE TABLE IF NOT EXISTS channels (
       id INTEGER PRIMARY KEY,
@@ -54,11 +44,20 @@ async function initDb(db) {
       is_banned INTEGER,
       verified INTEGER,
       livestream_title TEXT,
+      bio TEXT,
+      instagram TEXT,
+      twitter TEXT,
+      youtube TEXT,
+      discord TEXT,
+      tiktok TEXT,
+      facebook TEXT,
+      profile_pic TEXT,
       raw_payload TEXT,
       last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
+  // Username History Table
   await runQuery(db, `
     CREATE TABLE IF NOT EXISTS username_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,42 +68,75 @@ async function initDb(db) {
       FOREIGN KEY (channel_id) REFERENCES channels (id)
     )
   `);
+
+  // Social Links & Bio History Table
+  await runQuery(db, `
+    CREATE TABLE IF NOT EXISTS socials_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel_id INTEGER NOT NULL,
+      field_name TEXT NOT NULL,
+      old_value TEXT,
+      new_value TEXT,
+      detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (channel_id) REFERENCES channels (id)
+    )
+  `);
 }
 
-// Process single Kick payload
 async function processChannelPayload(db, data) {
   if (!data || !data.id) return;
 
   const channelId = data.id;
-  const userId = data.user_id || (data.user ? data.user.id : null);
+  const userObj = data.user || {};
+  const userId = data.user_id || userObj.id || null;
   const newSlug = data.slug;
-  const newUsername = (data.user && data.user.username) ? data.user.username : newSlug;
+  const newUsername = userObj.username || newSlug;
   const followersCount = parseInt(data.followers_count || 0, 10);
   const isBanned = data.is_banned ? 1 : 0;
   const verified = data.verified ? 1 : 0;
   const livestreamTitle = data.livestream ? data.livestream.session_title : null;
   const rawPayload = JSON.stringify(data);
 
-  // Check if channel exists by immutable ID
-  const existing = await getQuery(db, 'SELECT current_slug, current_username FROM channels WHERE id = ?', [channelId]);
+  // Social media fields
+  const bio = userObj.bio || "";
+  const instagram = userObj.instagram || "";
+  const twitter = userObj.twitter || "";
+  const youtube = userObj.youtube || "";
+  const discord = userObj.discord || "";
+  const tiktok = userObj.tiktok || "";
+  const facebook = userObj.facebook || "";
+  const profilePic = userObj.profile_pic || "";
+
+  const existing = await getQuery(
+    db, 
+    'SELECT * FROM channels WHERE id = ?', 
+    [channelId]
+  );
 
   if (!existing) {
-    // Brand new entry
+    // 1. Initial Insert for New Channel
     await runQuery(db, `
       INSERT INTO channels (
         id, user_id, current_slug, current_username, followers_count,
-        is_banned, verified, livestream_title, raw_payload
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [channelId, userId, newSlug, newUsername, followersCount, isBanned, verified, livestreamTitle, rawPayload]);
+        is_banned, verified, livestream_title, bio, instagram, twitter,
+        youtube, discord, tiktok, facebook, profile_pic, raw_payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      channelId, userId, newSlug, newUsername, followersCount,
+      isBanned, verified, livestreamTitle, bio, instagram, twitter,
+      youtube, discord, tiktok, facebook, profilePic, rawPayload
+    ]);
 
+    // Record initial handle in history
     await runQuery(db, `
       INSERT INTO username_history (channel_id, slug, username)
       VALUES (?, ?, ?)
     `, [channelId, newSlug, newUsername]);
 
-    console.log(`[+] Initialized record: ${newUsername} (ID: ${channelId})`);
+    console.log(`[+] Initialized record for @${newSlug}`);
+
   } else {
-    // Update existing record
+    // 2. Update existing channel details
     await runQuery(db, `
       UPDATE channels
       SET current_slug = ?,
@@ -113,55 +145,59 @@ async function processChannelPayload(db, data) {
           is_banned = ?,
           verified = ?,
           livestream_title = ?,
+          bio = ?,
+          instagram = ?,
+          twitter = ?,
+          youtube = ?,
+          discord = ?,
+          tiktok = ?,
+          facebook = ?,
+          profile_pic = ?,
           raw_payload = ?,
           last_updated = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [newSlug, newUsername, followersCount, isBanned, verified, livestreamTitle, rawPayload, channelId]);
+    `, [
+      newSlug, newUsername, followersCount, isBanned, verified,
+      livestreamTitle, bio, instagram, twitter, youtube, discord,
+      tiktok, facebook, profilePic, rawPayload, channelId
+    ]);
 
-    // Track username change if changed
+    // 3. Track Handle Changes
     if (existing.current_slug.toLowerCase() !== newSlug.toLowerCase()) {
-      console.log(`[!] HANDLE CHANGE DETECTED: @${existing.current_slug} -> @${newSlug}`);
+      console.log(`[!] HANDLE CHANGE: @${existing.current_slug} -> @${newSlug}`);
       await runQuery(db, `
         INSERT INTO username_history (channel_id, slug, username)
         VALUES (?, ?, ?)
       `, [channelId, newSlug, newUsername]);
-    } else {
-      console.log(`[=] Updated data for @${newSlug}`);
+    }
+
+    // 4. Track Social Link & Bio Changes
+    const socialFields = [
+      { name: 'bio', oldVal: existing.bio, newVal: bio },
+      { name: 'instagram', oldVal: existing.instagram, newVal: instagram },
+      { name: 'twitter', oldVal: existing.twitter, newVal: twitter },
+      { name: 'youtube', oldVal: existing.youtube, newVal: youtube },
+      { name: 'discord', oldVal: existing.discord, newVal: discord },
+      { name: 'tiktok', oldVal: existing.tiktok, newVal: tiktok },
+      { name: 'facebook', oldVal: existing.facebook, newVal: facebook }
+    ];
+
+    for (const item of socialFields) {
+      if ((item.oldVal || "") !== (item.newVal || "")) {
+        console.log(`[!] SOCIAL CHANGE (@${newSlug}): ${item.name} changed from "${item.oldVal}" to "${item.newVal}"`);
+        await runQuery(db, `
+          INSERT INTO socials_history (channel_id, field_name, old_value, new_value)
+          VALUES (?, ?, ?, ?)
+        `, [channelId, item.name, item.oldVal, item.newVal]);
+      }
     }
   }
-}
-
-// Search utility (CLI / verification)
-async function searchUser(db, handle) {
-  const query = `
-    SELECT c.id, c.current_username, c.current_slug, c.followers_count, h.slug, h.detected_at
-    FROM username_history h
-    JOIN channels c ON h.channel_id = c.id
-    WHERE LOWER(h.slug) = LOWER(?) OR LOWER(h.username) = LOWER(?)
-    ORDER BY h.detected_at ASC
-  `;
-  const rows = await allQuery(db, query, [handle, handle]);
-
-  if (!rows || rows.length === 0) {
-    console.log(`\n[-] No history found for handle: '${handle}'`);
-    return;
-  }
-
-  console.log("\n==================================================");
-  console.log(`CHANNEL FOUND (ID: ${rows[0].id})`);
-  console.log(`Current Handle : ${rows[0].current_username} (@${rows[0].current_slug})`);
-  console.log(`Followers      : ${rows[0].followers_count.toLocaleString()}`);
-  console.log("--------------------------------------------------");
-  console.log("HANDLE HISTORY TIMELINE:");
-  rows.forEach(r => console.log(`  • [${r.detected_at}] @${r.slug}`));
-  console.log("==================================================\n");
 }
 
 (async () => {
   const db = await openDatabase();
   await initDb(db);
 
-  // Read targets from file
   let targets = [];
   if (fs.existsSync('targets.txt')) {
     targets = fs.readFileSync('targets.txt', 'utf-8')
@@ -176,23 +212,15 @@ async function searchUser(db, handle) {
     return;
   }
 
-  console.log("Launching Puppeteer browser...");
   const browser = await puppeteer.launch({
     headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--disable-gpu'
-    ]
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
   const page = await browser.newPage();
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
   for (const slug of targets) {
-    console.log(`\nFetching API data for channel: ${slug}...`);
     try {
       await page.goto(`https://kick.com/api/v2/channels/${slug}`, {
         waitUntil: 'networkidle2',
@@ -203,22 +231,13 @@ async function searchUser(db, handle) {
       const jsonData = JSON.parse(content);
 
       await processChannelPayload(db, jsonData);
-
     } catch (error) {
-      console.error(`[-] Error fetching channel ${slug}:`, error.message);
+      console.error(`[-] Error fetching ${slug}:`, error.message);
     }
 
-    // Delay between calls to remain undetected
     await new Promise(r => setTimeout(r, 2000));
   }
 
   await browser.close();
-
-  // Test lookup after process finishes
-  if (targets.length > 0) {
-    await searchUser(db, targets[0]);
-  }
-
   db.close();
-  console.log("Job completed successfully.");
 })();
