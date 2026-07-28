@@ -43,7 +43,6 @@
 
     #status { text-align: center; margin-top: 18px; font-size: 0.95rem; color: var(--text-muted); min-height: 24px; }
     
-    /* Featured Channels Grid with Avatars */
     .featured-section { margin-top: 35px; animation: fadeInUp 0.7s ease-out; }
     .featured-title { font-size: 0.9rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 16px; }
     .featured-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
@@ -79,8 +78,9 @@
     .stat-value { font-size: 1.3rem; font-weight: 700; }
 
     .section-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; color: var(--accent-blue); }
-    .socials-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 30px; }
-    .social-btn { display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.07); padding: 12px; border-radius: 12px; color: var(--text-main); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+    .socials-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 30px; }
+    .social-btn { display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.07); padding: 12px; border-radius: 12px; color: var(--text-main); text-decoration: none; font-size: 0.85rem; font-weight: 600; word-break: break-all; text-align: center; transition: all 0.2s ease; }
+    .social-btn:hover { border-color: var(--kick-green); color: var(--kick-green); background: rgba(83, 252, 24, 0.05); }
 
     .timeline-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
     .timeline-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); padding: 14px 20px; border-radius: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
@@ -108,15 +108,11 @@
     </div>
     <div id="status">Initializing Database Engine...</div>
 
-    <!-- Featured Section (3x3 Grid with Avatars) -->
     <div id="featuredSection" class="featured-section">
       <div class="featured-title">Featured Channels</div>
-      <div class="featured-grid" id="featuredGrid">
-        <!-- Dynamically populated from SQLite database -->
-      </div>
+      <div class="featured-grid" id="featuredGrid"></div>
     </div>
 
-    <!-- Channel Details Display Card -->
     <div id="resultCard" class="glass-card hidden">
       <div class="profile-header">
         <div class="avatar-wrapper">
@@ -281,7 +277,6 @@
         const channel = historyRows[0];
         const channelId = channel.channel_id;
 
-        // Parse Raw JSON Payload if available for 100% precision on KPP & Stats
         let rawData = {};
         try {
           if (channel.raw_payload) rawData = JSON.parse(channel.raw_payload);
@@ -291,13 +286,13 @@
         document.getElementById('currentName').childNodes[0].nodeValue = `${channel.current_username} (@${channel.current_slug}) `;
         document.getElementById('channelIds').innerText = `Channel ID: ${channelId} | User ID: ${channel.user_id || 'N/A'}`;
         
-        // 1. Verified Badge Check
+        // 1. Verified Badge
         const isVerified = rawData.verified !== undefined ? Boolean(rawData.verified) : (Number(channel.verified) === 1 || channel.verified === true);
         const verifiedBadge = document.getElementById('verifiedBadge');
         if (isVerified) verifiedBadge.classList.remove('hidden');
         else verifiedBadge.classList.add('hidden');
 
-        // 2. Monetized Badge Check
+        // 2. Monetized Badge
         const isSubEnabled = rawData.subscription_enabled !== undefined ? Boolean(rawData.subscription_enabled) : (Number(channel.subscription_enabled) === 1 || channel.subscription_enabled === true);
         const monetizedBadge = document.getElementById('monetizedBadge');
         monetizedBadge.classList.remove('hidden', 'monetized-badge-yes', 'monetized-badge-no');
@@ -309,16 +304,27 @@
           monetizedBadge.innerText = 'Monetized ✖';
         }
 
-        // 3. FIXED KPP Badge Check
+        // 3. Followers Parse Fallback
         const followersNum = rawData.followers_count !== undefined 
           ? parseInt(String(rawData.followers_count).replace(/\D/g, ''), 10) || 0
-          : parseInt(String(channel.followers_count || '0').replace(/\D/g, ''), 10) || 0;
+          : (rawData.followersCount !== undefined
+            ? parseInt(String(rawData.followersCount).replace(/\D/g, ''), 10) || 0
+            : (rawData.follower_count !== undefined 
+              ? parseInt(String(rawData.follower_count).replace(/\D/g, ''), 10) || 0
+              : parseInt(String(channel.followers_count || '0').replace(/\D/g, ''), 10) || 0));
 
-        const isVodEnabled = rawData.vod_enabled !== undefined 
-          ? Boolean(rawData.vod_enabled) 
-          : (Number(channel.vod_enabled) === 1 || channel.vod_enabled === true);
+        let isVodEnabled = false;
+        if (rawData.vod_settings && rawData.vod_settings.enabled !== undefined) {
+          isVodEnabled = Boolean(rawData.vod_settings.enabled);
+        } else if (rawData.vod_enabled !== undefined) {
+          isVodEnabled = Boolean(rawData.vod_enabled);
+        } else if (channel.vod_enabled !== undefined && channel.vod_enabled !== null) {
+          isVodEnabled = (Number(channel.vod_enabled) === 1 || channel.vod_enabled === true);
+        } else {
+          isVodEnabled = true; 
+        }
 
-        // KPP Qualification: Verified == true AND Followers >= 250 AND VOD Storage == true
+        // KPP Eligibility Requirement
         const isKppEligible = isVerified && (followersNum >= 250) && isVodEnabled;
 
         const kppBadge = document.getElementById('kppBadge');
@@ -342,13 +348,40 @@
         
         document.getElementById('statLive').innerText = channel.livestream_title ? channel.livestream_title : "Offline";
 
+        // Social Buttons Rendering Fix
         const socialsContainer = document.getElementById('socialsContainer');
         socialsContainer.innerHTML = '';
+        
+        const socialBaseUrls = {
+          instagram: 'https://instagram.com/',
+          twitter: 'https://x.com/',
+          youtube: 'https://youtube.com/',
+          discord: 'https://discord.gg/',
+          tiktok: 'https://tiktok.com/@',
+          facebook: 'https://facebook.com/'
+        };
+
         ['instagram', 'twitter', 'youtube', 'discord', 'tiktok', 'facebook'].forEach(soc => {
-          if (channel[soc]) {
+          let val = channel[soc];
+          if (val && val.trim() !== '') {
+            val = val.trim();
+            let displayVal = val;
+            
+            if (soc === 'youtube' && val.startsWith('channel/')) {
+              displayVal = 'Channel Link ↗';
+            } else if (displayVal.length > 20) {
+              displayVal = displayVal.substring(0, 17) + '...';
+            }
+
+            const href = val.startsWith('http') ? val : `${socialBaseUrls[soc] || ''}${val}`;
+
             const a = document.createElement('a');
             a.className = 'social-btn';
-            a.innerText = `${soc.toUpperCase()}: ${channel[soc]}`;
+            a.href = href;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.title = val;
+            a.innerText = `${soc.toUpperCase()}: ${displayVal}`;
             socialsContainer.appendChild(a);
           }
         });
