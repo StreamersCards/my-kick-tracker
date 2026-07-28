@@ -5,9 +5,11 @@ const path = require('path');
 
 const DB_PATH = path.join(__dirname, 'kick_tracker.db');
 const TARGETS_FILE = path.join(__dirname, 'targets.txt');
+const IDS_FILE = path.join(__dirname, 'ids.txt');
 
 const db = new sqlite3.Database(DB_PATH);
 
+// Database initialization
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS channels (
@@ -33,7 +35,6 @@ db.serialize(() => {
     )
   `);
 
-  // Ensure missing columns exist on existing databases
   const columns = [
     { name: 'bio', type: 'TEXT' },
     { name: 'instagram', type: 'TEXT' },
@@ -93,7 +94,7 @@ function getQuery(query, params = []) {
 }
 
 async function processChannelPayload(data) {
-  if (!data || !data.id) return;
+  if (!data || !data.id) return null;
 
   const channelId = data.id;
   const userObj = data.user || {};
@@ -136,7 +137,7 @@ async function processChannelPayload(data) {
       VALUES (?, ?, ?)
     `, [channelId, newSlug, newUsername]);
 
-    console.log(`[+] Tracked new channel: @${newSlug}`);
+    console.log(`[+] Tracked new channel: @${newSlug} (ID: ${channelId})`);
   } else {
     await runQuery(`
       UPDATE channels
@@ -157,6 +158,7 @@ async function processChannelPayload(data) {
         INSERT INTO username_history (channel_id, slug, username)
         VALUES (?, ?, ?)
       `, [channelId, newSlug, newUsername]);
+      console.log(`[!] Username change detected: ${existing.current_slug} -> ${newSlug}`);
     }
 
     const socialFields = [
@@ -178,18 +180,34 @@ async function processChannelPayload(data) {
       }
     }
   }
+
+  return channelId;
+}
+
+// Read or initialize IDs file
+function getSavedIds() {
+  if (!fs.existsSync(IDS_FILE)) {
+    fs.writeFileSync(IDS_FILE, '');
+    return new Set();
+  }
+  const lines = fs.readFileSync(IDS_FILE, 'utf-8').split('\n');
+  return new Set(lines.map(l => l.trim()).filter(l => l && !l.startsWith('#')));
+}
+
+function saveIds(idsSet) {
+  fs.writeFileSync(IDS_FILE, Array.from(idsSet).join('\n'));
 }
 
 async function run() {
-  if (!fs.existsSync(TARGETS_FILE)) {
-    console.error('[-] targets.txt missing');
-    process.exit(1);
-  }
+  const savedIds = getSavedIds();
+  let targets = [];
 
-  const targets = fs.readFileSync(TARGETS_FILE, 'utf-8')
-    .split('\n')
-    .map(t => t.trim())
-    .filter(t => t && !t.startsWith('#'));
+  if (fs.existsSync(TARGETS_FILE)) {
+    targets = fs.readFileSync(TARGETS_FILE, 'utf-8')
+      .split('\n')
+      .map(t => t.trim())
+      .filter(t => t && !t.startsWith('#'));
+  }
 
   const browser = await puppeteer.launch({
     headless: 'new',
@@ -199,13 +217,36 @@ async function run() {
   const page = await browser.newPage();
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
 
+  // Step 1: Process any new handles in targets.txt to discover their Channel IDs
   for (const slug of targets) {
     try {
       await page.goto(`https://kick.com/api/v2/channels/${slug}`, { waitUntil: 'networkidle2', timeout: 20000 });
       const content = await page.evaluate(() => document.body.innerText);
-      await processChannelPayload(JSON.parse(content));
+      const payload = JSON.parse(content);
+      const channelId = await processChannelPayload(payload);
+
+      if (channelId) {
+        savedIds.add(String(channelId));
+      }
     } catch (err) {
-      console.error(`[-] Error scraping ${slug}:`, err.message);
+      console.error(`[-] Error scraping slug ${slug}:`, err.message);
+    }
+  }
+
+  // Save all discovered IDs back into ids.txt
+  saveIds(savedIds);
+
+  // Step 2: Ensure all historical IDs in ids.txt are refreshed (via DB lookup)
+  for (const idStr of savedIds) {
+    const existing = await getQuery('SELECT current_slug FROM channels WHERE id = ?', [parseInt(idStr, 10)]);
+    if (existing && existing.current_slug) {
+      try {
+        await page.goto(`https://kick.com/api/v2/channels/${existing.current_slug}`, { waitUntil: 'networkidle2', timeout: 20000 });
+        const content = await page.evaluate(() => document.body.innerText);
+        await processChannelPayload(JSON.parse(content));
+      } catch (err) {
+        console.error(`[-] Error updating channel ID ${idStr}:`, err.message);
+      }
     }
   }
 
