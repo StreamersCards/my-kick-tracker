@@ -18,6 +18,7 @@ db.serialize(() => {
       followers_count INTEGER,
       is_banned INTEGER,
       verified INTEGER,
+      subscription_enabled INTEGER DEFAULT 0,
       livestream_title TEXT,
       bio TEXT,
       instagram TEXT,
@@ -32,10 +33,21 @@ db.serialize(() => {
     )
   `);
 
-  // Ensure columns exist on old DB files
-  const columns = ['bio', 'instagram', 'twitter', 'youtube', 'discord', 'tiktok', 'facebook', 'profile_pic'];
+  // Ensure missing columns exist on existing databases
+  const columns = [
+    { name: 'bio', type: 'TEXT' },
+    { name: 'instagram', type: 'TEXT' },
+    { name: 'twitter', type: 'TEXT' },
+    { name: 'youtube', type: 'TEXT' },
+    { name: 'discord', type: 'TEXT' },
+    { name: 'tiktok', type: 'TEXT' },
+    { name: 'facebook', type: 'TEXT' },
+    { name: 'profile_pic', type: 'TEXT' },
+    { name: 'subscription_enabled', type: 'INTEGER DEFAULT 0' }
+  ];
+
   columns.forEach(col => {
-    db.run(`ALTER TABLE channels ADD COLUMN ${col} TEXT`, () => {});
+    db.run(`ALTER TABLE channels ADD COLUMN ${col.name} ${col.type}`, () => {});
   });
 
   db.run(`
@@ -91,6 +103,7 @@ async function processChannelPayload(data) {
   const followersCount = parseInt(data.followers_count || 0, 10);
   const isBanned = data.is_banned ? 1 : 0;
   const verified = data.verified ? 1 : 0;
+  const subscriptionEnabled = (data.subscription_enabled || data.is_affiliate) ? 1 : 0;
   const livestreamTitle = data.livestream ? data.livestream.session_title : null;
   const rawPayload = JSON.stringify(data);
 
@@ -109,12 +122,12 @@ async function processChannelPayload(data) {
     await runQuery(`
       INSERT INTO channels (
         id, user_id, current_slug, current_username, followers_count,
-        is_banned, verified, livestream_title, bio, instagram, twitter,
+        is_banned, verified, subscription_enabled, livestream_title, bio, instagram, twitter,
         youtube, discord, tiktok, facebook, profile_pic, raw_payload
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       channelId, userId, newSlug, newUsername, followersCount,
-      isBanned, verified, livestreamTitle, bio, instagram, twitter,
+      isBanned, verified, subscriptionEnabled, livestreamTitle, bio, instagram, twitter,
       youtube, discord, tiktok, facebook, profilePic, rawPayload
     ]);
 
@@ -128,13 +141,13 @@ async function processChannelPayload(data) {
     await runQuery(`
       UPDATE channels
       SET current_slug = ?, current_username = ?, followers_count = ?,
-          is_banned = ?, verified = ?, livestream_title = ?, bio = ?,
+          is_banned = ?, verified = ?, subscription_enabled = ?, livestream_title = ?, bio = ?,
           instagram = ?, twitter = ?, youtube = ?, discord = ?,
           tiktok = ?, facebook = ?, profile_pic = ?, raw_payload = ?,
           last_updated = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
-      newSlug, newUsername, followersCount, isBanned, verified,
+      newSlug, newUsername, followersCount, isBanned, verified, subscriptionEnabled,
       livestreamTitle, bio, instagram, twitter, youtube, discord,
       tiktok, facebook, profilePic, rawPayload, channelId
     ]);
