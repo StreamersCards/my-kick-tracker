@@ -32,12 +32,11 @@
 
     .container { width: 100%; max-width: 900px; padding: 40px 20px; z-index: 1; }
     
-    /* Top Navigation bar */
     .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 35px; width: 100%; }
     .logo-home { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text-main); cursor: pointer; transition: opacity 0.2s; }
     .logo-home:hover { opacity: 0.85; }
     .logo-icon { width: 36px; height: 36px; background: var(--kick-green); color: #000; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem; box-shadow: 0 0 15px var(--kick-green-glow); }
-    .logo-text { font-weight: 800; font-size: 1.15srem; letter-spacing: -0.5px; }
+    .logo-text { font-weight: 800; font-size: 1.15rem; letter-spacing: -0.5px; }
 
     .qol-tip { font-size: 0.8rem; color: var(--text-muted); background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); padding: 6px 12px; border-radius: 8px; }
 
@@ -94,11 +93,9 @@
     .section-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; color: var(--accent-blue); }
     .socials-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 30px; }
     
-    /* Interactive Social Buttons */
     .social-btn { display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.07); padding: 12px; border-radius: 12px; color: var(--text-main); text-decoration: none; font-size: 0.85rem; font-weight: 600; word-break: break-all; text-align: center; transition: all 0.2s ease; }
     .social-btn:hover { border-color: var(--kick-green); color: var(--kick-green); background: rgba(83, 252, 24, 0.05); }
 
-    /* Static Non-Clickable Discord Card */
     .social-btn-static { display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); padding: 12px; border-radius: 12px; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; word-break: break-all; text-align: center; cursor: default; }
 
     .timeline-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
@@ -255,21 +252,29 @@
       const user = urlParams.get('user') || urlParams.get('u');
       if (user) {
         document.getElementById('searchInput').value = user;
-        searchUser(user);
+        searchUser(user, false); // false = don't push state again
+      } else {
+        goHomeUI();
       }
     }
 
     function quickSearch(handle) {
       document.getElementById('searchInput').value = handle;
-      searchUser(handle);
+      searchUser(handle, true);
     }
 
     function goHome() {
       window.history.pushState({}, '', window.location.pathname);
+      goHomeUI();
+    }
+
+    function goHomeUI() {
       document.getElementById('searchInput').value = '';
       document.getElementById('resultCard').classList.add('hidden');
       document.getElementById('featuredSection').classList.remove('hidden');
-      document.getElementById('status').innerText = "Database ready. Search any handle above.";
+      if (db) {
+        document.getElementById('status').innerText = "Database ready. Search any handle above.";
+      }
     }
 
     function copyProfileLink() {
@@ -280,7 +285,7 @@
       setTimeout(() => btn.innerText = originalText, 2000);
     }
 
-    function searchUser(explicitQuery) {
+    function searchUser(explicitQuery, pushHistory = true) {
       const statusEl = document.getElementById('status');
       const cardEl = document.getElementById('resultCard');
       const featuredEl = document.getElementById('featuredSection');
@@ -289,7 +294,9 @@
       const queryHandle = (explicitQuery || inputEl.value).trim().toLowerCase();
       if (!queryHandle || !db) return;
 
-      window.history.pushState({}, '', `?user=${encodeURIComponent(queryHandle)}`);
+      if (pushHistory) {
+        window.history.pushState({}, '', `?user=${encodeURIComponent(queryHandle)}`);
+      }
 
       try {
         const historyQuery = `
@@ -334,13 +341,11 @@
         document.getElementById('currentName').childNodes[0].nodeValue = `${channel.current_username} (@${channel.current_slug}) `;
         document.getElementById('channelIds').innerText = `Channel ID: ${channelId} | User ID: ${channel.user_id || 'N/A'}`;
         
-        // 1. Verified Badge
         const isVerified = rawData.verified !== undefined ? Boolean(rawData.verified) : (Number(channel.verified) === 1 || channel.verified === true);
         const verifiedBadge = document.getElementById('verifiedBadge');
         if (isVerified) verifiedBadge.classList.remove('hidden');
         else verifiedBadge.classList.add('hidden');
 
-        // 2. Monetized Badge
         const isSubEnabled = rawData.subscription_enabled !== undefined ? Boolean(rawData.subscription_enabled) : (Number(channel.subscription_enabled) === 1 || channel.subscription_enabled === true);
         const monetizedBadge = document.getElementById('monetizedBadge');
         monetizedBadge.classList.remove('hidden', 'monetized-badge-yes', 'monetized-badge-no');
@@ -352,7 +357,6 @@
           monetizedBadge.innerText = 'Monetized ✖';
         }
 
-        // 3. Followers Parse Fallback
         const followersNum = rawData.followers_count !== undefined 
           ? parseInt(String(rawData.followers_count).replace(/\D/g, ''), 10) || 0
           : (rawData.followersCount !== undefined
@@ -393,7 +397,6 @@
         
         document.getElementById('statLive').innerText = channel.livestream_title ? channel.livestream_title : "Offline";
 
-        // Social Profiles Rendering (Discord made unclickable/static)
         const socialsContainer = document.getElementById('socialsContainer');
         socialsContainer.innerHTML = '';
         
@@ -410,7 +413,6 @@
           if (val && val.trim() !== '') {
             val = val.trim();
 
-            // DISCORD QOL FIX: Make unclickable static badge card
             if (soc === 'discord') {
               const div = document.createElement('div');
               div.className = 'social-btn-static';
@@ -479,12 +481,16 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('searchBtn').addEventListener('click', () => searchUser());
+      document.getElementById('searchBtn').addEventListener('click', () => searchUser(null, true));
       document.getElementById('searchInput').addEventListener('keypress', (e) => { 
-        if (e.key === 'Enter') searchUser(); 
+        if (e.key === 'Enter') searchUser(null, true); 
       });
 
-      // Global keyboard shortcuts (QoL)
+      // Listen to browser back/forward buttons
+      window.addEventListener('popstate', () => {
+        checkUrl();
+      });
+
       document.addEventListener('keydown', (e) => {
         if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
           e.preventDefault();
