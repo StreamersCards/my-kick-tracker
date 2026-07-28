@@ -3,70 +3,386 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kick Intelligence Tracker</title>
+  <title>Kick Intelligence & History Tracker</title>
   
+  <!-- Modern Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   
+  <!-- SQL.js Engine -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
 
   <style>
     :root {
-      --bg-dark: #0a0c10;
-      --card-bg: rgba(18, 22, 31, 0.65);
+      --bg-dark: #07090e;
+      --card-bg: rgba(15, 19, 28, 0.7);
       --card-border: rgba(255, 255, 255, 0.08);
       --kick-green: #53fc18;
-      --kick-green-glow: rgba(83, 252, 24, 0.35);
+      --kick-green-glow: rgba(83, 252, 24, 0.25);
       --accent-blue: #00f0ff;
       --text-main: #f0f4f8;
       --text-muted: #8a99ad;
       --danger-red: #ff4d4d;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-    body { background-color: var(--bg-dark); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; position: relative; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
 
-    .bg-glow-1 { position: fixed; top: -150px; left: 10%; width: 500px; height: 500px; background: radial-gradient(circle, var(--kick-green-glow) 0%, transparent 70%); filter: blur(90px); z-index: -2; pointer-events: none; }
-    #cursor-glow { position: fixed; top: 0; left: 0; width: 400px; height: 400px; margin-left: -200px; margin-top: -200px; background: radial-gradient(circle, rgba(83, 252, 24, 0.07) 0%, rgba(0, 240, 255, 0.02) 40%, transparent 70%); border-radius: 50%; pointer-events: none; z-index: -1; transition: transform 0.05s ease-out; }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+      position: relative;
+    }
 
-    .container { width: 100%; max-width: 900px; padding: 40px 20px; z-index: 1; }
-    header { text-align: center; margin-bottom: 35px; }
-    header h1 { font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
-    header p { color: var(--text-muted); font-size: 1.05rem; }
+    /* Ambient Background Glow */
+    .bg-glow-top {
+      position: fixed;
+      top: -200px;
+      left: 20%;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, var(--kick-green-glow) 0%, transparent 70%);
+      filter: blur(120px);
+      z-index: -2;
+      pointer-events: none;
+    }
 
-    .search-box { display: flex; gap: 12px; background: var(--card-bg); border: 1px solid var(--card-border); padding: 8px; border-radius: 16px; backdrop-filter: blur(16px); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4); }
-    .search-box input { flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 1.1rem; padding: 12px 16px; }
-    .search-box button { background: var(--kick-green); color: #000; font-weight: 700; font-size: 1rem; border: none; padding: 12px 28px; border-radius: 12px; cursor: pointer; }
+    /* Dynamic Cursor Glow */
+    #cursor-glow {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 450px;
+      height: 450px;
+      margin-left: -225px;
+      margin-top: -225px;
+      background: radial-gradient(circle, rgba(83, 252, 24, 0.08) 0%, rgba(0, 240, 255, 0.02) 40%, transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: -1;
+      transition: transform 0.04s cubic-bezier(0.2, 0, 0.2, 1);
+    }
 
-    #status { text-align: center; margin-top: 15px; font-size: 0.95rem; color: var(--text-muted); min-height: 24px; }
-    .glass-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; padding: 30px; backdrop-filter: blur(20px); box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5); margin-top: 25px; }
+    /* Click Ripple Effect */
+    .click-ripple {
+      position: fixed;
+      border-radius: 50%;
+      border: 2px solid var(--kick-green);
+      pointer-events: none;
+      animation: ripple 0.5s ease-out forwards;
+      z-index: 9999;
+    }
+
+    @keyframes ripple {
+      0% {
+        width: 0px;
+        height: 0px;
+        opacity: 0.9;
+        transform: translate(-50%, -50%);
+      }
+      100% {
+        width: 140px;
+        height: 140px;
+        opacity: 0;
+        transform: translate(-50%, -50%);
+      }
+    }
+
+    /* Layout Container */
+    .container {
+      width: 100%;
+      max-width: 900px;
+      padding: 50px 20px;
+      z-index: 1;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+      animation: fadeInDown 0.6s ease-out;
+    }
+
+    header h1 {
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    /* Search Bar Design & Pulse */
+    .search-box {
+      display: flex;
+      gap: 12px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 8px;
+      border-radius: 16px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .search-box:focus-within {
+      border-color: var(--kick-green);
+      box-shadow: 0 0 25px var(--kick-green-glow);
+      transform: translateY(-2px);
+    }
+
+    .search-box input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 1.1rem;
+      padding: 12px 18px;
+    }
+
+    .search-box button {
+      background: var(--kick-green);
+      color: #000;
+      font-weight: 700;
+      font-size: 1rem;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 15px var(--kick-green-glow);
+    }
+
+    .search-box button:hover {
+      transform: scale(1.03);
+      box-shadow: 0 0 25px rgba(83, 252, 24, 0.5);
+    }
+
+    .search-box button:active {
+      transform: scale(0.97);
+    }
+
+    #status {
+      text-align: center;
+      margin-top: 18px;
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      min-height: 24px;
+      transition: color 0.3s ease;
+    }
+
+    /* Main Glass Card */
+    .glass-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 35px;
+      backdrop-filter: blur(24px);
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+      margin-top: 30px;
+      animation: cardAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes cardAppear {
+      from { opacity: 0; transform: translateY(20px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
     .hidden { display: none !important; }
 
-    .profile-header { display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--card-border); padding-bottom: 25px; margin-bottom: 25px; }
-    .avatar-wrapper img { width: 85px; height: 85px; border-radius: 50%; object-fit: cover; border: 2px solid var(--kick-green); }
-    .profile-title h2 { font-size: 1.8rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
-    .verified-badge { background: var(--kick-green); color: #000; font-size: 0.75rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; }
-    .sub-meta { color: var(--text-muted); font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; margin-top: 4px; }
+    /* Profile Header */
+    .profile-header {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 25px;
+      margin-bottom: 25px;
+    }
 
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 30px; }
-    .stat-item { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); padding: 16px; border-radius: 12px; }
-    .stat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; }
-    .stat-value { font-size: 1.25rem; font-weight: 700; }
+    .avatar-wrapper img {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--kick-green);
+      box-shadow: 0 0 20px var(--kick-green-glow);
+      transition: transform 0.3s ease;
+    }
 
-    .section-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; color: var(--accent-blue); }
-    .timeline-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-    .timeline-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); padding: 12px 18px; border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
-    .timeline-item span.field { color: var(--kick-green); font-weight: 600; }
-    .timeline-date { color: var(--text-muted); font-size: 0.8rem; }
+    .avatar-wrapper img:hover {
+      transform: scale(1.05) rotate(2deg);
+    }
 
-    .socials-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 30px; }
-    .social-btn { display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); padding: 10px; border-radius: 10px; color: var(--text-main); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+    .profile-title h2 {
+      font-size: 1.9rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .verified-badge {
+      background: var(--kick-green);
+      color: #000;
+      font-size: 0.75rem;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 10px var(--kick-green-glow);
+    }
+
+    .sub-meta {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 6px;
+    }
+
+    /* Grid Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+
+    .stat-item {
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 18px;
+      border-radius: 14px;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .stat-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+    }
+
+    /* Headings */
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 15px;
+      color: var(--accent-blue);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Social Links Buttons */
+    .socials-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 30px;
+    }
+
+    .social-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      padding: 12px;
+      border-radius: 12px;
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.25 ease;
+    }
+
+    .social-btn:hover {
+      background: rgba(83, 252, 24, 0.1);
+      border-color: var(--kick-green);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px var(--kick-green-glow);
+    }
+
+    /* Timelines */
+    .timeline-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .timeline-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      padding: 14px 20px;
+      border-radius: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .timeline-item:hover {
+      background: rgba(255, 255, 255, 0.035);
+      transform: translateX(4px);
+    }
+
+    .timeline-item span.field {
+      color: var(--kick-green);
+      font-weight: 600;
+    }
+
+    .timeline-date {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
 
-  <div class="bg-glow-1"></div>
+  <!-- Ambient Glows -->
+  <div class="bg-glow-top"></div>
   <div id="cursor-glow"></div>
 
   <div class="container">
@@ -75,16 +391,20 @@
       <p>Audit historical channel handles, social changes, and live metadata</p>
     </header>
 
+    <!-- Search Section -->
     <div class="search-box">
-      <input type="text" id="searchInput" placeholder="Enter Kick handle (e.g. odedsvr)..." />
+      <input type="text" id="searchInput" placeholder="Enter Kick handle (e.g. odedsvr)..." autocomplete="off" spellcheck="false" />
       <button id="searchBtn">Search</button>
     </div>
     <div id="status">Initializing Database Engine...</div>
 
+    <!-- Search Results Display -->
     <div id="resultCard" class="glass-card hidden">
+      
+      <!-- Profile Header -->
       <div class="profile-header">
         <div class="avatar-wrapper">
-          <img id="avatarImg" src="" alt="Profile Pic" />
+          <img id="avatarImg" src="" alt="Profile Avatar" />
         </div>
         <div class="profile-title">
           <h2 id="currentName">-- <span id="verifiedBadge" class="verified-badge hidden">Verified</span></h2>
@@ -92,6 +412,7 @@
         </div>
       </div>
 
+      <!-- Live Metrics -->
       <div class="stats-grid">
         <div class="stat-item">
           <div class="stat-label">Followers</div>
@@ -107,25 +428,41 @@
         </div>
       </div>
 
-      <div class="section-title">Connected Accounts</div>
+      <!-- Social Networks -->
+      <div class="section-title">Connected Social Profiles</div>
       <div id="socialsContainer" class="socials-grid"></div>
 
-      <div class="section-title">Username History</div>
+      <!-- Handle Timeline -->
+      <div class="section-title">Username History Log</div>
       <ul id="usernameTimeline" class="timeline-list"></ul>
 
-      <div class="section-title" style="margin-top: 25px;">Social Media & Bio Modifications</div>
+      <!-- Social Change History -->
+      <div class="section-title" style="margin-top: 30px;">Social Media & Bio Modification History</div>
       <ul id="socialsTimeline" class="timeline-list"></ul>
+
     </div>
   </div>
 
   <script>
     let db = null;
 
+    // Interactive Cursor Glow Tracker
     const cursorGlow = document.getElementById('cursor-glow');
     document.addEventListener('mousemove', (e) => {
       cursorGlow.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0)`;
     });
 
+    // Ripple effect on click
+    document.addEventListener('click', (e) => {
+      const ripple = document.createElement('div');
+      ripple.className = 'click-ripple';
+      ripple.style.left = `${e.clientX}px`;
+      ripple.style.top = `${e.clientY}px`;
+      document.body.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 500);
+    });
+
+    // Initialize Database
     async function initDatabase() {
       const statusEl = document.getElementById('status');
       try {
@@ -135,7 +472,7 @@
         });
 
         const response = await fetch('kick_tracker.db', { cache: 'no-store' });
-        if (!response.ok) throw new Error("kick_tracker.db not found.");
+        if (!response.ok) throw new Error("kick_tracker.db not found in repository root.");
 
         const buffer = await response.arrayBuffer();
         db = new SQL.Database(new Uint8Array(buffer));
@@ -162,7 +499,12 @@
       const inputEl = document.getElementById('searchInput');
       
       const queryHandle = (explicitQuery || inputEl.value).trim().toLowerCase();
-      if (!queryHandle || !db) return;
+      if (!queryHandle) return;
+
+      if (!db) {
+        statusEl.innerText = "Database is loading. Please wait...";
+        return;
+      }
 
       window.history.pushState({}, '', `?user=${encodeURIComponent(queryHandle)}`);
 
@@ -194,6 +536,11 @@
 
         statusEl.innerText = "";
         cardEl.classList.remove('hidden');
+
+        // Trigger animation reset
+        cardEl.style.animation = 'none';
+        cardEl.offsetHeight; // Trigger reflow
+        cardEl.style.animation = null;
 
         const channel = historyRows[0];
         const channelId = channel.channel_id;
@@ -227,7 +574,7 @@
         });
 
         if (socialsContainer.children.length === 0) {
-          socialsContainer.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">No connected socials.</span>';
+          socialsContainer.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">No connected socials found.</span>';
         }
 
         const usernameTimeline = document.getElementById('usernameTimeline');
@@ -250,7 +597,7 @@
         socialsTimeline.innerHTML = '';
 
         if (socialRows.length === 0) {
-          socialsTimeline.innerHTML = '<li class="timeline-item"><span style="color:var(--text-muted);">No social modifications logged yet.</span></li>';
+          socialsTimeline.innerHTML = '<li class="timeline-item"><span style="color:var(--text-muted);">No social media modifications logged.</span></li>';
         } else {
           socialRows.forEach(row => {
             const li = document.createElement('li');
