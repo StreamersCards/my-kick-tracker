@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history so pulls merge smoothly
 
       - name: Setup Node.js Environment
         uses: actions/setup-node@v4
@@ -34,8 +36,11 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          # Add database and the ID registry
-          git add kick_tracker.db ids.txt
+          # Pull any remote changes made while scraper was running
+          git pull --no-rebase origin main || true
           
-          # Commit only if there are changes
-          git diff --staged --quiet || (git commit -m "auto: update tracker database and ids.txt [skip ci]" && git push)
+          # Force add database and ID registry to guarantee tracking
+          git add -f kick_tracker.db ids.txt
+          
+          # Commit and push only if changes exist
+          git diff --staged --quiet || (git commit -m "auto: update tracker database and ids.txt [skip ci]" && git push origin main)
