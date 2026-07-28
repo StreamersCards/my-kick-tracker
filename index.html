@@ -3,14 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kick Intelligence & History Tracker</title>
+  <title>Kick Intelligence Tracker</title>
   
-  <!-- Inter & JetBrains Mono Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   
-  <!-- SQL.js WebAssembly Library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
 
   <style>
@@ -21,346 +19,54 @@
       --kick-green: #53fc18;
       --kick-green-glow: rgba(83, 252, 24, 0.35);
       --accent-blue: #00f0ff;
-      --accent-purple: #7000ff;
       --text-main: #f0f4f8;
       --text-muted: #8a99ad;
       --danger-red: #ff4d4d;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    body { background-color: var(--bg-dark); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; position: relative; }
 
-    body {
-      background-color: var(--bg-dark);
-      color: var(--text-main);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      overflow-x: hidden;
-      position: relative;
-    }
+    .bg-glow-1 { position: fixed; top: -150px; left: 10%; width: 500px; height: 500px; background: radial-gradient(circle, var(--kick-green-glow) 0%, transparent 70%); filter: blur(90px); z-index: -2; pointer-events: none; }
+    #cursor-glow { position: fixed; top: 0; left: 0; width: 400px; height: 400px; margin-left: -200px; margin-top: -200px; background: radial-gradient(circle, rgba(83, 252, 24, 0.07) 0%, rgba(0, 240, 255, 0.02) 40%, transparent 70%); border-radius: 50%; pointer-events: none; z-index: -1; transition: transform 0.05s ease-out; }
 
-    /* Ambient Background Glow */
-    .bg-glow-1 {
-      position: fixed;
-      top: -150px;
-      left: 10%;
-      width: 500px;
-      height: 500px;
-      background: radial-gradient(circle, var(--kick-green-glow) 0%, transparent 70%);
-      filter: blur(90px);
-      z-index: -2;
-      pointer-events: none;
-    }
+    .container { width: 100%; max-width: 900px; padding: 40px 20px; z-index: 1; }
+    header { text-align: center; margin-bottom: 35px; }
+    header h1 { font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
+    header p { color: var(--text-muted); font-size: 1.05rem; }
 
-    .bg-glow-2 {
-      position: fixed;
-      bottom: -150px;
-      right: 10%;
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, rgba(112, 0, 255, 0.15) 0%, transparent 70%);
-      filter: blur(100px);
-      z-index: -2;
-      pointer-events: none;
-    }
+    .search-box { display: flex; gap: 12px; background: var(--card-bg); border: 1px solid var(--card-border); padding: 8px; border-radius: 16px; backdrop-filter: blur(16px); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4); }
+    .search-box input { flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 1.1rem; padding: 12px 16px; }
+    .search-box button { background: var(--kick-green); color: #000; font-weight: 700; font-size: 1rem; border: none; padding: 12px 28px; border-radius: 12px; cursor: pointer; }
 
-    /* Interactive Cursor Glow */
-    #cursor-glow {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 400px;
-      height: 400px;
-      margin-left: -200px;
-      margin-top: -200px;
-      background: radial-gradient(circle, rgba(83, 252, 24, 0.07) 0%, rgba(0, 240, 255, 0.02) 40%, transparent 70%);
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: -1;
-      transition: transform 0.05s ease-out;
-    }
-
-    /* Click Ripple Effect */
-    .click-ripple {
-      position: fixed;
-      border-radius: 50%;
-      border: 2px solid var(--kick-green);
-      pointer-events: none;
-      animation: ripple 0.6s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
-      z-index: 9999;
-    }
-
-    @keyframes ripple {
-      0% {
-        width: 0px;
-        height: 0px;
-        opacity: 0.8;
-        transform: translate(-50%, -50%);
-      }
-      100% {
-        width: 120px;
-        height: 120px;
-        opacity: 0;
-        transform: translate(-50%, -50%);
-      }
-    }
-
-    /* App Container */
-    .container {
-      width: 100%;
-      max-width: 900px;
-      padding: 40px 20px;
-      z-index: 1;
-    }
-
-    header {
-      text-align: center;
-      margin-bottom: 35px;
-    }
-
-    header h1 {
-      font-size: 2.5rem;
-      font-weight: 800;
-      letter-spacing: -1px;
-      background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin-bottom: 8px;
-    }
-
-    header p {
-      color: var(--text-muted);
-      font-size: 1.05rem;
-    }
-
-    /* Search Bar Design */
-    .search-box {
-      display: flex;
-      gap: 12px;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      padding: 8px;
-      border-radius: 16px;
-      backdrop-filter: blur(16px);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-      transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .search-box:focus-within {
-      border-color: var(--kick-green);
-      box-shadow: 0 0 25px var(--kick-green-glow);
-    }
-
-    .search-box input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: #fff;
-      font-size: 1.1rem;
-      padding: 12px 16px;
-    }
-
-    .search-box button {
-      background: var(--kick-green);
-      color: #000;
-      font-weight: 700;
-      font-size: 1rem;
-      border: none;
-      padding: 12px 28px;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 0 15px var(--kick-green-glow);
-    }
-
-    .search-box button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 0 25px rgba(83, 252, 24, 0.6);
-    }
-
-    #status {
-      text-align: center;
-      margin-top: 15px;
-      font-size: 0.95rem;
-      color: var(--text-muted);
-      min-height: 24px;
-    }
-
-    /* Glass Cards */
-    .glass-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 30px;
-      backdrop-filter: blur(20px);
-      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
-      margin-top: 25px;
-      animation: fadeIn 0.4s ease-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(15px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
+    #status { text-align: center; margin-top: 15px; font-size: 0.95rem; color: var(--text-muted); min-height: 24px; }
+    .glass-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; padding: 30px; backdrop-filter: blur(20px); box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5); margin-top: 25px; }
     .hidden { display: none !important; }
 
-    /* Profile Header Layout */
-    .profile-header {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      border-bottom: 1px solid var(--card-border);
-      padding-bottom: 25px;
-      margin-bottom: 25px;
-    }
+    .profile-header { display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--card-border); padding-bottom: 25px; margin-bottom: 25px; }
+    .avatar-wrapper img { width: 85px; height: 85px; border-radius: 50%; object-fit: cover; border: 2px solid var(--kick-green); }
+    .profile-title h2 { font-size: 1.8rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .verified-badge { background: var(--kick-green); color: #000; font-size: 0.75rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; }
+    .sub-meta { color: var(--text-muted); font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; margin-top: 4px; }
 
-    .avatar-wrapper img {
-      width: 85px;
-      height: 85px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid var(--kick-green);
-      box-shadow: 0 0 15px var(--kick-green-glow);
-    }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 30px; }
+    .stat-item { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); padding: 16px; border-radius: 12px; }
+    .stat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; }
+    .stat-value { font-size: 1.25rem; font-weight: 700; }
 
-    .profile-title h2 {
-      font-size: 1.8rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .section-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; color: var(--accent-blue); }
+    .timeline-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .timeline-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); padding: 12px 18px; border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
+    .timeline-item span.field { color: var(--kick-green); font-weight: 600; }
+    .timeline-date { color: var(--text-muted); font-size: 0.8rem; }
 
-    .verified-badge {
-      background: var(--kick-green);
-      color: #000;
-      font-size: 0.75rem;
-      font-weight: 800;
-      padding: 2px 8px;
-      border-radius: 6px;
-      text-transform: uppercase;
-    }
-
-    .sub-meta {
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      font-family: 'JetBrains Mono', monospace;
-      margin-top: 4px;
-    }
-
-    /* Grid Stats */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 15px;
-      margin-bottom: 30px;
-    }
-
-    .stat-item {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      padding: 16px;
-      border-radius: 12px;
-    }
-
-    .stat-label {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 6px;
-    }
-
-    .stat-value {
-      font-size: 1.25rem;
-      font-weight: 700;
-    }
-
-    /* Section Headings */
-    .section-title {
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin-bottom: 15px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--accent-blue);
-    }
-
-    /* Timeline & History Lists */
-    .timeline-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .timeline-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.04);
-      padding: 12px 18px;
-      border-radius: 10px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.9rem;
-    }
-
-    .timeline-item span.field {
-      color: var(--kick-green);
-      font-weight: 600;
-    }
-
-    .timeline-date {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-    }
-
-    /* Social Links Grid */
-    .socials-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 10px;
-      margin-bottom: 30px;
-    }
-
-    .social-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 10px;
-      border-radius: 10px;
-      color: var(--text-main);
-      text-decoration: none;
-      font-size: 0.85rem;
-      font-weight: 600;
-      transition: all 0.2s ease;
-    }
-
-    .social-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: var(--kick-green);
-      transform: translateY(-2px);
-    }
+    .socials-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 30px; }
+    .social-btn { display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); padding: 10px; border-radius: 10px; color: var(--text-main); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
   </style>
 </head>
 <body>
 
-  <!-- Ambient Lights -->
   <div class="bg-glow-1"></div>
-  <div class="bg-glow-2"></div>
   <div id="cursor-glow"></div>
 
   <div class="container">
@@ -369,17 +75,13 @@
       <p>Audit historical channel handles, social changes, and live metadata</p>
     </header>
 
-    <!-- Search Section -->
     <div class="search-box">
-      <input type="text" id="searchInput" placeholder="Enter Kick handle or path (e.g. xqc)..." />
+      <input type="text" id="searchInput" placeholder="Enter Kick handle (e.g. odedsvr)..." />
       <button id="searchBtn">Search</button>
     </div>
     <div id="status">Initializing Database Engine...</div>
 
-    <!-- Results Display -->
     <div id="resultCard" class="glass-card hidden">
-      
-      <!-- Profile Header -->
       <div class="profile-header">
         <div class="avatar-wrapper">
           <img id="avatarImg" src="" alt="Profile Pic" />
@@ -390,7 +92,6 @@
         </div>
       </div>
 
-      <!-- Quick Metrics -->
       <div class="stats-grid">
         <div class="stat-item">
           <div class="stat-label">Followers</div>
@@ -406,41 +107,25 @@
         </div>
       </div>
 
-      <!-- Live Social Accounts -->
       <div class="section-title">Connected Accounts</div>
       <div id="socialsContainer" class="socials-grid"></div>
 
-      <!-- Handle History Timeline -->
       <div class="section-title">Username History</div>
       <ul id="usernameTimeline" class="timeline-list"></ul>
 
-      <!-- Social Modifications Audit Log -->
       <div class="section-title" style="margin-top: 25px;">Social Media & Bio Modifications</div>
       <ul id="socialsTimeline" class="timeline-list"></ul>
-
     </div>
   </div>
 
   <script>
     let db = null;
 
-    // Interactive Cursor Glow Tracker
     const cursorGlow = document.getElementById('cursor-glow');
     document.addEventListener('mousemove', (e) => {
       cursorGlow.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0)`;
     });
 
-    // Click Ripple FX
-    document.addEventListener('click', (e) => {
-      const ripple = document.createElement('div');
-      ripple.className = 'click-ripple';
-      ripple.style.left = `${e.clientX}px`;
-      ripple.style.top = `${e.clientY}px`;
-      document.body.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 600);
-    });
-
-    // Load Database Wasm Engine
     async function initDatabase() {
       const statusEl = document.getElementById('status');
       try {
@@ -450,37 +135,24 @@
         });
 
         const response = await fetch('kick_tracker.db', { cache: 'no-store' });
-        if (!response.ok) throw new Error("kick_tracker.db not found in repository root.");
+        if (!response.ok) throw new Error("kick_tracker.db not found.");
 
         const buffer = await response.arrayBuffer();
         db = new SQL.Database(new Uint8Array(buffer));
 
-        statusEl.innerText = "Database ready. Search any creator or handle above.";
-        
-        // Auto-check for /user URL parameter on launch
-        checkUrlPathAndSearch();
+        statusEl.innerText = "Database ready. Search any handle above.";
+        checkUrl();
       } catch (err) {
-        console.error("Initialization Error:", err);
         statusEl.innerText = `Database Error: ${err.message}`;
       }
     }
 
-    // Support for /user or ?user= or path-based searching
-    function checkUrlPathAndSearch() {
+    function checkUrl() {
       const urlParams = new URLSearchParams(window.location.search);
-      let queryUser = urlParams.get('user') || urlParams.get('u');
-
-      // If no query string, check path segments (e.g., domain.com/xqc)
-      if (!queryUser) {
-        const pathSegments = window.location.pathname.split('/').filter(Boolean);
-        if (pathSegments.length > 0 && pathSegments[0] !== 'index.html') {
-          queryUser = pathSegments[0];
-        }
-      }
-
-      if (queryUser) {
-        document.getElementById('searchInput').value = queryUser;
-        searchUser(queryUser);
+      const user = urlParams.get('user') || urlParams.get('u');
+      if (user) {
+        document.getElementById('searchInput').value = user;
+        searchUser(user);
       }
     }
 
@@ -490,38 +162,17 @@
       const inputEl = document.getElementById('searchInput');
       
       const queryHandle = (explicitQuery || inputEl.value).trim().toLowerCase();
+      if (!queryHandle || !db) return;
 
-      if (!queryHandle) {
-        statusEl.innerText = "Please enter a handle or username.";
-        return;
-      }
-
-      if (!db) {
-        statusEl.innerText = "Database is loading. Please wait...";
-        return;
-      }
-
-      // Update URL without refreshing the browser tab
       window.history.pushState({}, '', `?user=${encodeURIComponent(queryHandle)}`);
 
       try {
-        // Query Primary Channel & Username History
         const historyQuery = `
           SELECT 
-            c.id AS channel_id, 
-            c.user_id, 
-            c.current_username, 
-            c.current_slug, 
-            c.followers_count, 
-            c.is_banned, 
-            c.verified, 
-            c.livestream_title, 
-            c.bio,
+            c.id AS channel_id, c.user_id, c.current_username, c.current_slug, 
+            c.followers_count, c.is_banned, c.verified, c.livestream_title, c.bio,
             c.instagram, c.twitter, c.youtube, c.discord, c.tiktok, c.facebook, c.profile_pic,
-            c.last_updated,
-            h.slug AS history_slug, 
-            h.username AS history_username, 
-            h.detected_at
+            h.slug AS history_slug, h.username AS history_username, h.detected_at
           FROM username_history h
           JOIN channels c ON h.channel_id = c.id
           WHERE LOWER(h.slug) = ? OR LOWER(h.username) = ? OR LOWER(c.current_slug) = ?
@@ -532,9 +183,7 @@
         stmt.bind([queryHandle, queryHandle, queryHandle]);
 
         const historyRows = [];
-        while (stmt.step()) {
-          historyRows.push(stmt.getAsObject());
-        }
+        while (stmt.step()) historyRows.push(stmt.getAsObject());
         stmt.free();
 
         if (historyRows.length === 0) {
@@ -549,7 +198,6 @@
         const channel = historyRows[0];
         const channelId = channel.channel_id;
 
-        // Render Profile Info
         document.getElementById('avatarImg').src = channel.profile_pic || 'https://kick.com/favicon.ico';
         document.getElementById('currentName').childNodes[0].nodeValue = `${channel.current_username} (@${channel.current_slug}) `;
         document.getElementById('channelIds').innerText = `Channel ID: ${channelId} | User ID: ${channel.user_id || 'N/A'}`;
@@ -558,7 +206,6 @@
         if (channel.verified) verifiedBadge.classList.remove('hidden');
         else verifiedBadge.classList.add('hidden');
 
-        // Metrics
         document.getElementById('statFollowers').innerText = Number(channel.followers_count || 0).toLocaleString();
         
         const isBanned = Boolean(channel.is_banned);
@@ -568,85 +215,59 @@
         
         document.getElementById('statLive').innerText = channel.livestream_title ? channel.livestream_title : "Offline";
 
-        // Social Media Buttons
         const socialsContainer = document.getElementById('socialsContainer');
         socialsContainer.innerHTML = '';
-        const socialsList = ['instagram', 'twitter', 'youtube', 'discord', 'tiktok', 'facebook'];
-        
-        socialsList.forEach(soc => {
+        ['instagram', 'twitter', 'youtube', 'discord', 'tiktok', 'facebook'].forEach(soc => {
           if (channel[soc]) {
             const a = document.createElement('a');
             a.className = 'social-btn';
-            a.target = '_blank';
             a.innerText = `${soc.toUpperCase()}: ${channel[soc]}`;
             socialsContainer.appendChild(a);
           }
         });
 
         if (socialsContainer.children.length === 0) {
-          socialsContainer.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">No connected social accounts found.</span>';
+          socialsContainer.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">No connected socials.</span>';
         }
 
-        // Render Username Timeline
         const usernameTimeline = document.getElementById('usernameTimeline');
         usernameTimeline.innerHTML = '';
         historyRows.forEach(row => {
           const li = document.createElement('li');
           li.className = 'timeline-item';
-          li.innerHTML = `
-            <span>@${row.history_slug} <small>(${row.history_username})</small></span>
-            <span class="timeline-date">${row.detected_at}</span>
-          `;
+          li.innerHTML = `<span>@${row.history_slug} <small>(${row.history_username})</small></span><span class="timeline-date">${row.detected_at}</span>`;
           usernameTimeline.appendChild(li);
         });
 
-        // Query Social Link Modification History
-        const socialsQuery = `
-          SELECT field_name, old_value, new_value, detected_at
-          FROM socials_history
-          WHERE channel_id = ?
-          ORDER BY detected_at DESC
-        `;
-
-        const socialStmt = db.prepare(socialsQuery);
+        const socialStmt = db.prepare(`SELECT field_name, old_value, new_value, detected_at FROM socials_history WHERE channel_id = ? ORDER BY detected_at DESC`);
         socialStmt.bind([channelId]);
 
         const socialRows = [];
-        while (socialStmt.step()) {
-          socialRows.push(socialStmt.getAsObject());
-        }
+        while (socialStmt.step()) socialRows.push(socialStmt.getAsObject());
         socialStmt.free();
 
         const socialsTimeline = document.getElementById('socialsTimeline');
         socialsTimeline.innerHTML = '';
 
         if (socialRows.length === 0) {
-          socialsTimeline.innerHTML = '<li class="timeline-item"><span style="color:var(--text-muted);">No changes recorded in social links or bio.</span></li>';
+          socialsTimeline.innerHTML = '<li class="timeline-item"><span style="color:var(--text-muted);">No social modifications logged yet.</span></li>';
         } else {
           socialRows.forEach(row => {
             const li = document.createElement('li');
             li.className = 'timeline-item';
-            li.innerHTML = `
-              <span>Changed <span class="field">${row.field_name}</span> from "${row.old_value || 'None'}" to "${row.new_value || 'None'}"</span>
-              <span class="timeline-date">${row.detected_at}</span>
-            `;
+            li.innerHTML = `<span>Changed <span class="field">${row.field_name}</span> from "${row.old_value || 'None'}" to "${row.new_value || 'None'}"</span><span class="timeline-date">${row.detected_at}</span>`;
             socialsTimeline.appendChild(li);
           });
         }
 
       } catch (err) {
-        console.error("Search Execution Error:", err);
         statusEl.innerText = `Search Error: ${err.message}`;
       }
     }
 
-    // Attach Listeners
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('searchBtn').addEventListener('click', () => searchUser());
-      document.getElementById('searchInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') searchUser();
-      });
-
+      document.getElementById('searchInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') searchUser(); });
       initDatabase();
     });
   </script>
