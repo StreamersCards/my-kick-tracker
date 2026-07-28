@@ -1,0 +1,44 @@
+name: Kick Puppeteer Tracker
+
+on:
+  schedule:
+    # Runs every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allows manual trigger from Actions tab
+
+jobs:
+  run-tracker:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # Needed to commit sqlite db updates back to repo
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Puppeteer Harvester
+        run: node tracker.js
+
+      - name: Commit and Push Database
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git add kick_tracker.db
+          
+          if ! git diff --cached --quiet; then
+            git commit -m "auto: sync channel database and username timeline [skip ci]"
+            git push
+          else
+            echo "No changes detected in database."
+          fi

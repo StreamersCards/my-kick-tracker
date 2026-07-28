@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kick Channel & Username History Lookup</title>
+  <!-- Load sql.js WebAssembly Engine from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+  <style>
+    :root {
+      --bg-color: #0e1015;
+      --card-bg: #191c24;
+      --accent-color: #53fc18; /* Kick Green */
+      --text-main: #f5f5f5;
+      --text-muted: #9e9e9e;
+      --border-color: #2b2f3a;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 2rem 1rem;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 800px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .sub-heading {
+      text-align: center;
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+    }
+
+    .search-box {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 2rem;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 0.8rem 1rem;
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-size: 1rem;
+      outline: none;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent-color);
+    }
+
+    button {
+      padding: 0.8rem 1.5rem;
+      background-color: var(--accent-color);
+      color: #000;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: opacity 0.2s;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .status-msg {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .channel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .channel-title h2 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .channel-title span {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .badge {
+      background-color: rgba(83, 252, 24, 0.1);
+      color: var(--accent-color);
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: bold;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-item {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 0.8rem;
+      border-radius: 8px;
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      display: block;
+    }
+
+    .stat-value {
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin-top: 0.2rem;
+    }
+
+    .history-section h3 {
+      margin-top: 0;
+      font-size: 1.1rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.5rem;
+    }
+
+    .timeline {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .timeline-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.6rem 0;
+      border-bottom: 1px dashed var(--border-color);
+    }
+
+    .timeline-item:last-child {
+      border-bottom: none;
+    }
+
+    .timeline-handle {
+      font-weight: 500;
+    }
+
+    .timeline-date {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Kick Channel History</h1>
+    <p class="sub-heading">Search channels by present or past username</p>
+
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Enter username (e.g. odedsvr)..." />
+      <button id="searchBtn">Search</button>
+    </div>
+
+    <div id="status" class="status-msg">Downloading database...</div>
+
+    <!-- Result View -->
+    <div id="resultCard" class="card hidden">
+      <div class="channel-header">
+        <div class="channel-title">
+          <h2 id="currentName">--</h2>
+          <span id="channelIds">ID: -- | User ID: --</span>
+        </div>
+        <div id="verifiedBadge" class="badge">VERIFIED</div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-item">
+          <span class="stat-label">Followers</span>
+          <div class="stat-value" id="statFollowers">0</div>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Account Status</span>
+          <div class="stat-value" id="statBanned">Active</div>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Livestream Status</span>
+          <div class="stat-value" id="statLive">Offline</div>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Last Database Sync</span>
+          <div class="stat-value" id="statUpdated">--</div>
+        </div>
+      </div>
+
+      <div class="history-section">
+        <h3>Username History Timeline</h3>
+        <ul id="timelineList" class="timeline"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let db = null;
+
+    // Load Wasm SQLite Engine & Database
+    async function initDatabase() {
+      const statusEl = document.getElementById('status');
+      try {
+        const SQL = await initSqlJs({
+          locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}`
+        });
+
+        // Fetch local SQLite database generated by GitHub Actions
+        const response = await fetch('kick_tracker.db', { cache: 'no-store' });
+        if (!response.ok) throw new Error("Could not find kick_tracker.db");
+
+        const buffer = await response.arrayBuffer();
+        db = new SQL.Database(new Uint8Array(buffer));
+
+        statusEl.innerText = "Database loaded. Ready to search!";
+      } catch (err) {
+        console.error(err);
+        statusEl.innerText = "Failed to load database. Ensure kick_tracker.db exists in repo.";
+      }
+    }
+
+    function searchUser() {
+      const queryHandle = document.getElementById('searchInput').value.trim();
+      const statusEl = document.getElementById('status');
+      const cardEl = document.getElementById('resultCard');
+
+      if (!queryHandle || !db) return;
+
+      // 1. Query history to find matching channel ID across past or current handles
+      const historyQuery = `
+        SELECT c.id, c.user_id, c.current_username, c.current_slug, c.followers_count, 
+               c.is_banned, c.verified, c.livestream_title, c.last_updated,
+               h.slug, h.username, h.detected_at
+        FROM username_history h
+        JOIN channels c ON h.channel_id = c.id
+        WHERE LOWER(h.slug) = LOWER(?) OR LOWER(h.username) = LOWER(?)
+        ORDER BY h.detected_at ASC
+      `;
+
+      const stmt = db.prepare(historyQuery);
+      stmt.bind([queryHandle, queryHandle]);
+
+      const historyRows = [];
+      while (stmt.step()) {
+        historyRows.push(stmt.getAsObject());
+      }
+      stmt.free();
+
+      if (historyRows.length === 0) {
+        statusEl.innerText = `No user or history found matching "${queryHandle}".`;
+        cardEl.classList.add('hidden');
+        return;
+      }
+
+      statusEl.innerText = "";
+      cardEl.classList.remove('hidden');
+
+      // Populate Channel Profile Details
+      const channel = historyRows[0];
+      document.getElementById('currentName').innerText = `${channel.current_username} (@${channel.current_slug})`;
+      document.getElementById('channelIds').innerText = `Channel ID: ${channel.id} | User ID: ${channel.user_id || 'N/A'}`;
+      
+      document.getElementById('verifiedBadge').style.display = channel.verified ? 'inline-block' : 'none';
+      document.getElementById('statFollowers').innerText = Number(channel.followers_count).toLocaleString();
+      document.getElementById('statBanned').innerText = channel.is_banned ? "Banned" : "Active";
+      document.getElementById('statBanned').style.color = channel.is_banned ? "#ff4d4d" : "#53fc18";
+      
+      document.getElementById('statLive').innerText = channel.livestream_title ? channel.livestream_title : "Offline";
+      document.getElementById('statUpdated').innerText = channel.last_updated;
+
+      // Populate Timeline List
+      const timelineList = document.getElementById('timelineList');
+      timelineList.innerHTML = '';
+
+      historyRows.forEach(row => {
+        const li = document.createElement('li');
+        li.className = 'timeline-item';
+        li.innerHTML = `
+          <span class="timeline-handle">@${row.slug} (${row.username})</span>
+          <span class="timeline-date">${row.detected_at}</span>
+        `;
+        timelineList.appendChild(li);
+      });
+    }
+
+    // Event Listeners
+    document.getElementById('searchBtn').addEventListener('click', searchUser);
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') searchUser();
+    });
+
+    // Initialize on page load
+    initDatabase();
+  </script>
+</body>
+</html>
