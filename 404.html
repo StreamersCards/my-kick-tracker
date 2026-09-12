@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 - Page Not Found</title>
+  <style>
+    :root {
+      --bg: #07090e;
+      --card: rgba(15, 19, 28, 0.82);
+      --border: rgba(255,255,255,0.08);
+      --green: #53fc18;
+      --text: #f0f4f8;
+      --muted: #8a99ad;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .card {
+      width: min(90vw, 560px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 42px 28px;
+      text-align: center;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+    }
+    .code {
+      font-size: clamp(3rem, 8vw, 6rem);
+      font-weight: 800;
+      color: var(--green);
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(1.5rem, 3vw, 2.3rem);
+    }
+    p {
+      margin: 0 0 24px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    a {
+      display: inline-block;
+      background: var(--green);
+      color: #000;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 12px 20px;
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="code">404</div>
+    <h1>Page Not Found</h1>
+    <p>The page you requested does not exist or is not available on this site.</p>
+    <a href="/">Return Home</a>
+  </div>
+</body>
+</html>

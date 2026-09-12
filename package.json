@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "tracker.js",
   "scripts": {
-    "start": "node tracker.js"
+    "start": "node tracker.js --monitor",
+    "run-once": "node tracker.js",
+    "monitor": "node tracker.js --monitor",
+    "serve": "node server.js"
   },
   "dependencies": {
     "puppeteer": "^22.0.0",

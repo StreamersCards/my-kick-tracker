@@ -49,11 +49,16 @@
     .search-box input { flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 1.1rem; padding: 12px 18px; }
     .search-box button { background: var(--kick-green); color: #000; font-weight: 700; font-size: 1rem; border: none; padding: 12px 30px; border-radius: 12px; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 0 15px var(--kick-green-glow); }
     .search-box button:hover { transform: scale(1.03); box-shadow: 0 0 25px rgba(83, 252, 24, 0.5); }
+    .search-box button:disabled { cursor: wait; opacity: 0.55; transform: none; }
 
     #status { text-align: center; margin-top: 18px; font-size: 0.95rem; color: var(--text-muted); min-height: 24px; }
     
     .featured-section { margin-top: 35px; animation: fadeInUp 0.7s ease-out; }
     .featured-title { font-size: 0.9rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 16px; }
+    .home-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0 0 24px; }
+    .home-stat { background: rgba(255,255,255,0.025); border: 1px solid var(--card-border); padding: 14px 16px; border-radius: 12px; }
+    .home-stat-label { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .home-stat-value { color: var(--text-main); font-size: 1.35rem; font-weight: 800; margin-top: 4px; }
     .featured-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
     @media (max-width: 650px) { .featured-grid { grid-template-columns: repeat(1, 1fr); } }
 
@@ -71,8 +76,41 @@
 
     .profile-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--card-border); padding-bottom: 25px; margin-bottom: 25px; flex-wrap: wrap; gap: 20px; }
     .profile-left { display: flex; align-items: center; gap: 22px; }
-    .avatar-wrapper img { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 2px solid var(--kick-green); box-shadow: 0 0 20px var(--kick-green-glow); }
+    .avatar-wrapper { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+    .avatar-wrapper img { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 2px solid var(--kick-green); box-shadow: 0 0 20px var(--kick-green-glow); transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s; }
+    .avatar-wrapper.live-ring { cursor: pointer; }
+    .avatar-wrapper.live-ring img { border: 3px solid var(--kick-green); box-shadow: 0 0 10px var(--kick-green), 0 0 24px var(--kick-green-glow); }
+    .avatar-wrapper.live-ring:hover img { transform: scale(1.04); box-shadow: 0 0 14px var(--kick-green), 0 0 32px var(--kick-green-glow); }
     .profile-title h2 { font-size: 1.9rem; font-weight: 800; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 74, 74, 0.12);
+      border: 1px solid rgba(255, 74, 74, 0.45);
+      color: #ff7a7a;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      box-shadow: 0 0 12px rgba(255, 74, 74, 0.35);
+      animation: livePulse 1.15s ease-in-out infinite;
+    }
+    .live-badge .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ff4d4d;
+      box-shadow: 0 0 10px rgba(255, 74, 74, 0.9);
+      display: inline-block;
+    }
+    .live-badge.hidden { display: none; }
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 10px rgba(255, 74, 74, 0.35), 0 0 20px rgba(255, 74, 74, 0.18); }
+      50% { opacity: 0.82; box-shadow: 0 0 18px rgba(255, 74, 74, 0.8), 0 0 28px rgba(255, 74, 74, 0.32); }
+    }
     
     .action-btns { display: flex; gap: 10px; }
     .utility-btn { background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text-main); padding: 8px 14px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
@@ -102,6 +140,105 @@
     .timeline-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); padding: 14px 20px; border-radius: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
     .timeline-item span.field { color: var(--kick-green); font-weight: 600; }
     .timeline-date { color: var(--text-muted); font-size: 0.8rem; }
+    .timeline-change { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; }
+    .timeline-change-title { color: var(--text-main); font-family: 'Inter', sans-serif; font-weight: 700; }
+    .timeline-change-title .field { color: var(--kick-green); }
+    .timeline-value { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 10px; align-items: start; font-family: 'Inter', sans-serif; font-size: 0.82rem; line-height: 1.45; }
+    .timeline-value-label { color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; padding-top: 2px; }
+    .timeline-value-text { color: var(--text-main); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .timeline-value.old .timeline-value-text { color: #aeb8c7; }
+    .timeline-value.new .timeline-value-text { color: var(--kick-green); }
+    .socials-timeline-item { align-items: flex-start; gap: 18px; }
+
+    .chart-wrap { position: relative; width: 100%; min-height: 220px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 16px; padding: 14px 12px 12px; }
+    .chart-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .chart-toolbar label { color: var(--text-muted); font-size: 0.78rem; }
+    .chart-toolbar select { background: #111722; color: var(--text-main); border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 9px; }
+    .chart-summary { color: var(--text-muted); font-size: 0.8rem; margin-top: 4px; min-height: 18px; }
+    .chart-summary strong { color: var(--kick-green); }
+    #followersChart { display: block; width: 100%; height: 200px; }
+    .chart-tooltip { position: absolute; pointer-events: none; z-index: 4; transform: translate(-50%, -120%); background: rgba(10, 12, 18, 0.95); border: 1px solid rgba(83, 252, 24, 0.35); color: var(--text-main); padding: 8px 10px; border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; box-shadow: 0 12px 30px rgba(0,0,0,0.35); }
+    .chart-tooltip strong { color: var(--kick-green); }
+    .chart-milestone { stroke: rgba(0, 240, 255, 0.24); stroke-width: 1; stroke-dasharray: 4 5; }
+    .chart-milestone-label { fill: var(--accent-blue); font-size: 10px; font-family: 'JetBrains Mono', monospace; }
+    .history-toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin: -5px 0 12px; }
+    .history-toolbar label { color: var(--text-muted); font-size: 0.78rem; }
+    .history-toolbar select { background: #111722; color: var(--text-main); border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 9px; }
+    .history-actions { display: flex; justify-content: center; margin-top: 12px; }
+    .load-more-btn { background: transparent; color: var(--accent-blue); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 0.78rem; }
+    .load-more-btn:hover { border-color: var(--accent-blue); background: rgba(0, 240, 255, 0.06); }
+    .empty-state { color: var(--text-muted); font-size: 0.85rem; padding: 14px 2px; }
+    .chat-log-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .chat-log-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 12px 14px; }
+    .chat-log-content { min-width: 0; color: var(--text-main); line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .chat-log-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; }
+    .chat-log-channel { color: var(--accent-blue); font-weight: 700; }
+    .chat-log-type { color: var(--text-muted); text-transform: uppercase; font-size: 0.65rem; }
+    @media (max-width: 650px) {
+      .chat-log-item { grid-template-columns: 1fr; }
+      .chat-log-meta { align-items: flex-start; }
+    }
+    #toast { position: fixed; right: 22px; bottom: 22px; z-index: 10; background: rgba(15, 19, 28, 0.96); border: 1px solid var(--kick-green); color: var(--text-main); padding: 11px 14px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); opacity: 0; transform: translateY(10px); pointer-events: none; transition: opacity 0.2s, transform 0.2s; font-size: 0.82rem; }
+    #toast.visible { opacity: 1; transform: translateY(0); }
+    .consent-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgba(3, 5, 9, 0.86); backdrop-filter: blur(10px); }
+    .consent-panel { width: min(100%, 560px); background: #0f131c; border: 1px solid var(--card-border); border-radius: 18px; padding: 28px; box-shadow: 0 30px 80px rgba(0,0,0,0.65); }
+    .consent-panel h2 { margin: 0 0 10px; font-size: 1.45rem; }
+    .consent-panel p { color: var(--text-muted); line-height: 1.55; font-size: 0.9rem; margin-bottom: 18px; }
+    .consent-check { position: relative; display: flex; align-items: flex-start; gap: 10px; color: var(--text-main); font-size: 0.88rem; line-height: 1.45; margin: 12px 0; cursor: pointer; }
+    .consent-check input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .consent-box { width: 19px; height: 19px; flex: 0 0 auto; border: 2px solid #718096; border-radius: 4px; background: #080b11; margin-top: 1px; display: grid; place-items: center; color: #000; font-size: 14px; font-weight: 900; }
+    .consent-check input:checked + .consent-box { border-color: var(--kick-green); background: var(--kick-green); }
+    .consent-check input:checked + .consent-box::after { content: '✓'; }
+    .consent-check input:focus-visible + .consent-box { outline: 2px solid var(--accent-blue); outline-offset: 2px; }
+    .consent-check a { color: var(--kick-green); }
+    .consent-submit { width: 100%; margin-top: 12px; border: 0; border-radius: 10px; padding: 12px 16px; background: var(--kick-green); color: #000; font-weight: 800; cursor: pointer; }
+    .consent-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    @media (max-width: 650px) {
+      .container { padding: 24px 14px; }
+      .qol-tip { display: none; }
+      header h1 { font-size: 2rem; }
+      .search-box { flex-wrap: wrap; }
+      .search-box input { min-width: 100%; }
+      .search-box button { flex: 1; padding-inline: 12px; }
+      .glass-card { padding: 20px 14px; border-radius: 18px; }
+      .profile-header { align-items: flex-start; }
+      .profile-left { gap: 14px; min-width: 0; }
+      .profile-title h2 { font-size: 1.35rem; }
+      .sub-meta { font-size: 0.72rem; overflow-wrap: anywhere; }
+      .action-btns { width: 100%; }
+      .utility-btn { width: 100%; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .chart-toolbar { align-items: flex-start; flex-direction: column; }
+      .home-stats { grid-template-columns: 1fr; }
+      .socials-timeline-item { flex-direction: column; gap: 10px; }
+      .socials-timeline-item .timeline-date { align-self: flex-end; }
+    }
+
+    .site-footer {
+      margin-top: 32px;
+      padding: 18px 10px 26px;
+      text-align: center;
+      color: var(--text-muted);
+      border-top: 1px solid var(--card-border);
+      font-size: 0.78rem;
+    }
+    .site-footer .legal-note {
+      margin-bottom: 10px;
+      color: var(--text-muted);
+    }
+    .site-footer .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .site-footer a {
+      color: var(--text-main);
+      opacity: 0.9;
+      text-decoration: none;
+    }
+    .site-footer a:hover { opacity: 1; }
 
     @keyframes fadeInDown { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
@@ -111,6 +248,24 @@
 
   <div class="bg-glow-top"></div>
   <div id="cursor-glow"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="consentGate" class="consent-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="consentTitle">
+    <div class="consent-panel">
+      <h2 id="consentTitle">Review and agree to continue</h2>
+      <p>This site uses public Kick profile data and stores your agreement locally in this browser. You must accept both documents the first time you visit and whenever either document is updated.</p>
+      <label class="consent-check">
+        <input id="termsConsent" type="checkbox" />
+        <span class="consent-box" aria-hidden="true"></span>
+        <span>I have read and agree to the <a href="/terms.html" target="_blank" rel="noopener noreferrer">Terms of Use</a>.</span>
+      </label>
+      <label class="consent-check">
+        <input id="privacyConsent" type="checkbox" />
+        <span class="consent-box" aria-hidden="true"></span>
+        <span>I have read and acknowledge the <a href="/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span>
+      </label>
+      <button id="consentSubmit" class="consent-submit" type="button" disabled>Agree and continue</button>
+    </div>
+  </div>
 
   <div class="container">
     <div class="top-nav">
@@ -133,6 +288,10 @@
     <div id="status">Initializing Database Engine...</div>
 
     <div id="featuredSection" class="featured-section">
+      <div class="home-stats">
+        <div class="home-stat"><div class="home-stat-label">Channels tracked</div><div id="trackedChannelsCount" class="home-stat-value">--</div></div>
+        <div class="home-stat"><div class="home-stat-label">Chat users seen</div><div id="chatUsersCount" class="home-stat-value">--</div></div>
+      </div>
       <div class="featured-title">Featured Channels</div>
       <div class="featured-grid" id="featuredGrid"></div>
     </div>
@@ -140,8 +299,9 @@
     <div id="resultCard" class="glass-card hidden">
       <div class="profile-header">
         <div class="profile-left">
-          <div class="avatar-wrapper">
+          <div id="avatarWrapper" class="avatar-wrapper" role="link" aria-label="Open Kick channel">
             <img id="avatarImg" src="" alt="Profile Avatar" />
+            <span id="liveBadge" class="live-badge hidden"><span class="live-dot"></span> LIVE</span>
           </div>
           <div class="profile-title">
             <h2 id="currentName">-- 
@@ -150,6 +310,7 @@
               <span id="kppBadge" class="badge hidden"></span>
             </h2>
             <div id="channelIds" class="sub-meta">Channel ID: -- | User ID: --</div>
+            <div id="lastUpdated" class="sub-meta">Last update: --</div>
           </div>
         </div>
         <div class="action-btns">
@@ -164,28 +325,129 @@
         </div>
         <div class="stat-item">
           <div class="stat-label">Ban Status</div>
-          <div id="statBanned" class="stat-value">Active</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Current Broadcast</div>
-          <div id="statLive" class="stat-value">Offline</div>
+          <div id="statBanned" class="stat-value">Unknown</div>
         </div>
       </div>
 
       <div class="section-title">Connected Social Profiles</div>
       <div id="socialsContainer" class="socials-grid"></div>
 
+      <div class="section-title">Follower History</div>
+      <div class="chart-wrap">
+        <div class="chart-toolbar">
+          <label for="followerRange">Time range</label>
+          <select id="followerRange">
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="all" selected>All time</option>
+          </select>
+        </div>
+        <svg id="followersChart" viewBox="0 0 760 200" preserveAspectRatio="none"></svg>
+        <div id="followerSummary" class="chart-summary"></div>
+        <div id="followerTooltip" class="chart-tooltip hidden"></div>
+      </div>
+
       <div class="section-title">Username History Log</div>
       <ul id="usernameTimeline" class="timeline-list"></ul>
+      <div class="history-actions"><button id="usernameMoreBtn" class="load-more-btn hidden" type="button">Load more usernames</button></div>
 
       <div class="section-title" style="margin-top: 30px;">Social Media & Bio Modification History</div>
+      <div class="history-toolbar">
+        <label for="historyFilter">Show</label>
+        <select id="historyFilter">
+          <option value="all">All changes</option>
+          <option value="bio">Bio</option>
+          <option value="instagram">Instagram</option>
+          <option value="twitter">Twitter / X</option>
+          <option value="youtube">YouTube</option>
+          <option value="discord">Discord</option>
+          <option value="tiktok">TikTok</option>
+          <option value="facebook">Facebook</option>
+        </select>
+      </div>
       <ul id="socialsTimeline" class="timeline-list"></ul>
+      <div class="history-actions"><button id="socialMoreBtn" class="load-more-btn hidden" type="button">Load more changes</button></div>
+
+      <div class="section-title" style="margin-top: 30px;">Chat History</div>
+      <ul id="chatTimeline" class="chat-log-list"></ul>
+      <div class="history-actions"><button id="chatMoreBtn" class="load-more-btn hidden" type="button">Load more messages</button></div>
     </div>
+
+    <footer class="site-footer">
+      <div class="legal-note">Public Kick profile and chat data only. We do not collect passwords, DMs, payment info, or private account data.</div>
+      <div class="footer-links">
+        <a href="/privacy.html">Privacy Policy</a>
+        <a href="/terms.html">Terms</a>
+      </div>
+    </footer>
   </div>
 
   <script>
+    const TERMS_VERSION = '2026-09-12.2';
+    const PRIVACY_VERSION = '2026-09-12.3';
+    const CONSENT_STORAGE_KEY = 'kickintel-consent';
     let db = null;
-    const featuredHandles = ['odedsvr', 'xqc', 'adinross', 'trainwreckstv', 'roshtein', 'amouranth', 'f2alon', 'nadmoo', 'westcol'];
+    let currentFollowerRows = [];
+    let currentUsernameRows = [];
+    let currentSocialRows = [];
+    let currentChatRows = [];
+    let usernameVisibleCount = 10;
+    let socialVisibleCount = 10;
+    let chatVisibleCount = 20;
+
+    function consentIsCurrent() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(CONSENT_STORAGE_KEY) || 'null');
+        return saved?.termsVersion === TERMS_VERSION && saved?.privacyVersion === PRIVACY_VERSION;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function initializeConsent() {
+      const gate = document.getElementById('consentGate');
+      const terms = document.getElementById('termsConsent');
+      const privacy = document.getElementById('privacyConsent');
+      const submit = document.getElementById('consentSubmit');
+
+      if (consentIsCurrent()) {
+        initDatabase();
+        return;
+      }
+
+      gate.classList.remove('hidden');
+      const updateSubmitState = () => { submit.disabled = !(terms.checked && privacy.checked); };
+      terms.addEventListener('change', updateSubmitState);
+      privacy.addEventListener('change', updateSubmitState);
+      submit.addEventListener('click', () => {
+        if (!terms.checked || !privacy.checked) return;
+        try {
+          localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({
+            termsVersion: TERMS_VERSION,
+            privacyVersion: PRIVACY_VERSION,
+            acceptedAt: new Date().toISOString()
+          }));
+        } catch (error) {
+          showToast('Consent could not be saved in this browser.');
+          return;
+        }
+        gate.classList.add('hidden');
+        showToast('Agreement saved. Welcome.');
+        initDatabase();
+      });
+      terms.focus();
+    }
+    const featuredHandles = [
+      { handle: 'psyqr', avatar: 'https://files.kick.com/images/user/8693372/profile_image/conversion/f89b3f5d-a270-4718-985d-a4bbc3c1c613-fullsize.webp' },
+      { handle: 'ronengg', avatar: 'https://files.kick.com/images/user/4955749/profile_image/conversion/e1ea0779-a7db-4f16-828a-e7e4e00d5be3-fullsize.webp' },
+      { handle: 'odedsvr', avatar: 'https://files.kick.com/images/user/8436488/profile_image/conversion/16481ec1-a8fe-4087-9bea-a792a7e2d20c-fullsize.webp' },
+      { handle: 'xqc', avatar: 'https://files.kick.com/images/user/676/profile_image/conversion/931b4e8f-5445-427c-bd82-b473530390cc-fullsize.webp' },
+      { handle: 'sxb', avatar: 'https://files.kick.com/images/user/18838562/profile_image/conversion/8a124c9d-761a-4e7e-93ed-03cccaa11c02-fullsize.webp' },
+      { handle: 'maorameleh', avatar: 'https://files.kick.com/images/user/3470466/profile_image/conversion/4763c1a6-5041-4946-82af-451bcf465dcc-fullsize.webp' },
+      { handle: 'roshtein', avatar: 'https://files.kick.com/images/user/4647/profile_image/conversion/c1665091-ef9c-4c0d-a192-bdf1e6775ba3-fullsize.webp' },
+      { handle: 'igz', avatar: 'https://files.kick.com/images/user/3691093/profile_image/conversion/5ea637af-e2cc-41df-8643-18fc974a4b0b-fullsize.webp' },
+      { handle: 'adinross', avatar: 'https://files.kick.com/images/user/904404/profile_image/conversion/e344be03-aff2-4791-ae5a-22a9ac4cf89a-fullsize.webp' }
+    ];
 
     const cursorGlow = document.getElementById('cursor-glow');
     document.addEventListener('mousemove', (e) => {
@@ -207,6 +469,7 @@
         db = new SQL.Database(new Uint8Array(buffer));
 
         statusEl.innerText = "Database ready. Search any handle above.";
+        loadHomeStats();
         loadFeaturedGrid();
         checkUrl();
       } catch (err) {
@@ -214,24 +477,57 @@
       }
     }
 
+    function normalizeCount(value) {
+      if (value === null || value === undefined || value === '') return 0;
+      const parsed = Number.parseInt(String(value).replace(/[^0-9-]/g, ''), 10);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function loadHomeStats() {
+      if (!db) return;
+      const channelStmt = db.prepare('SELECT COUNT(*) AS count FROM channels');
+      channelStmt.step();
+      document.getElementById('trackedChannelsCount').innerText = Number(channelStmt.getAsObject().count || 0).toLocaleString();
+      channelStmt.free();
+
+      const chatUsersStmt = db.prepare('SELECT COUNT(*) AS count FROM chat_users');
+      chatUsersStmt.step();
+      document.getElementById('chatUsersCount').innerText = Number(chatUsersStmt.getAsObject().count || 0).toLocaleString();
+      chatUsersStmt.free();
+    }
+
+    let toastTimer = null;
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.innerText = message;
+      toast.classList.add('visible');
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => toast.classList.remove('visible'), 2600);
+    }
+
+    function extractRawPayloadValue(rawPayload, keys) {
+      if (!rawPayload) return null;
+      try {
+        const parsed = JSON.parse(rawPayload);
+        for (const key of keys) {
+          if (parsed && parsed[key] !== undefined && parsed[key] !== null && parsed[key] !== '') return parsed[key];
+          if (parsed?.user && parsed.user[key] !== undefined && parsed.user[key] !== null && parsed.user[key] !== '') return parsed.user[key];
+        }
+      } catch (e) {
+        return null;
+      }
+      return null;
+    }
+
     function loadFeaturedGrid() {
       const grid = document.getElementById('featuredGrid');
       grid.innerHTML = '';
 
-      featuredHandles.forEach(handle => {
-        let avatarSrc = 'https://kick.com/favicon.ico';
-        
-        if (db) {
-          try {
-            const stmt = db.prepare(`SELECT profile_pic FROM channels WHERE LOWER(current_slug) = ? OR LOWER(current_username) = ?`);
-            stmt.bind([handle, handle]);
-            if (stmt.step()) {
-              const res = stmt.getAsObject();
-              if (res.profile_pic) avatarSrc = res.profile_pic;
-            }
-            stmt.free();
-          } catch(e) {}
-        }
+      const selected = [...featuredHandles].slice(0, 9);
+
+      selected.forEach(({ handle, avatar }) => {
+        const avatarSrc = avatar || 'https://kick.com/favicon.ico';
 
         const card = document.createElement('a');
         card.className = 'featured-card';
@@ -241,7 +537,7 @@
             <img class="featured-avatar" src="${avatarSrc}" alt="${handle}" onerror="this.src='https://kick.com/favicon.ico'" />
             <span class="featured-name">@${handle}</span>
           </div>
-          <span class="featured-action">Try &rarr;</span>
+          <span class="featured-action">Open →</span>
         `;
         grid.appendChild(card);
       });
@@ -282,7 +578,283 @@
       const btn = event.target;
       const originalText = btn.innerText;
       btn.innerText = "Copied! ✓";
+      showToast('Profile link copied.');
       setTimeout(() => btn.innerText = originalText, 2000);
+    }
+
+    function hasExplicitBanStatus(rawData, channel) {
+      if (rawData && rawData.hasOwnProperty('is_banned') && rawData.is_banned !== undefined && rawData.is_banned !== null) {
+        return true;
+      }
+      if (channel && channel.hasOwnProperty('is_banned') && channel.is_banned !== undefined && channel.is_banned !== null && channel.is_banned !== '') {
+        return true;
+      }
+      return false;
+    }
+
+    function resolveBanStatus(rawData, channel) {
+      const rawPayload = rawData && Object.keys(rawData).length ? rawData : null;
+      if (rawPayload && Object.prototype.hasOwnProperty.call(rawPayload, 'is_banned')) {
+        return Boolean(rawPayload.is_banned);
+      }
+
+      if (channel && channel.raw_payload) {
+        try {
+          const parsed = JSON.parse(channel.raw_payload);
+          if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'is_banned')) {
+            return Boolean(parsed.is_banned);
+          }
+        } catch (e) {}
+      }
+
+      if (channel && channel.hasOwnProperty('is_banned') && channel.is_banned !== undefined && channel.is_banned !== null && channel.is_banned !== '') {
+        const numericValue = Number(channel.is_banned);
+        if (numericValue === 1) return true;
+        if (numericValue === 0) return null;
+      }
+
+      return null;
+    }
+
+    function formatRelativeTime(value) {
+      if (!value) return 'Unknown';
+      const date = new Date(value);
+      const diffMs = Date.now() - date.getTime();
+      const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+      if (diffMinutes < 1) return 'just now';
+      if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+
+      const diffMonths = Math.floor(diffDays / 30);
+      if (diffMonths < 12) return `${diffMonths} month${diffMonths === 1 ? '' : 's'} ago`;
+
+      const diffYears = Math.floor(diffMonths / 12);
+      return `${diffYears} year${diffYears === 1 ? '' : 's'} ago`;
+    }
+
+    function formatChartDate(value) {
+      if (!value) return 'Unknown';
+      const date = new Date(value);
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
+    }
+
+    function getFollowerRowsForRange() {
+      const range = document.getElementById('followerRange')?.value || 'all';
+      if (range === 'all') return currentFollowerRows;
+
+      const cutoff = Date.now() - Number(range) * 24 * 60 * 60 * 1000;
+      return currentFollowerRows.filter(row => {
+        const timestamp = new Date(String(row.recorded_at || '').replace(' ', 'T') + 'Z').getTime();
+        return Number.isFinite(timestamp) && timestamp >= cutoff;
+      });
+    }
+
+    function renderFollowerHistoryChart(rows) {
+      const svg = document.getElementById('followersChart');
+      const tooltip = document.getElementById('followerTooltip');
+      if (!svg || !rows || rows.length === 0) {
+        if (svg) svg.innerHTML = '';
+        if (tooltip) tooltip.classList.add('hidden');
+        const summary = document.getElementById('followerSummary');
+        if (summary) summary.innerText = 'No follower snapshots in this range.';
+        return;
+      }
+
+      const width = 760;
+      const height = 200;
+      const margin = { top: 20, right: 18, bottom: 28, left: 42 };
+      const values = rows.map(r => Number(r.followers_count) || 0);
+      const minValue = Math.min(...values);
+      const maxValue = Math.max(...values);
+      const low = 0;
+      const high = maxValue === low ? low + 1 : maxValue * 1.08;
+
+      const points = rows.map((row, index) => {
+        const x = margin.left + (rows.length === 1 ? 0.5 : index / (rows.length - 1)) * (width - margin.left - margin.right);
+        const y = height - margin.bottom - ((Number(row.followers_count) || 0) - low) / (high - low || 1) * (height - margin.top - margin.bottom);
+        return { x, y, count: Number(row.followers_count) || 0, date: row.recorded_at };
+      });
+
+      const summary = document.getElementById('followerSummary');
+      if (summary) {
+        const change = points[points.length - 1].count - points[0].count;
+        const prefix = change > 0 ? '+' : '';
+        summary.innerHTML = `${rows.length} snapshot${rows.length === 1 ? '' : 's'} · Change: <strong>${prefix}${change.toLocaleString()}</strong> followers`;
+      }
+
+      const milestoneValues = [1000, 10000, 100000, 1000000].filter(value => value <= maxValue && value >= low);
+      const milestoneMarkup = milestoneValues.map(value => {
+        const y = height - margin.bottom - (value - low) / (high - low || 1) * (height - margin.top - margin.bottom);
+        return `<line class="chart-milestone" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"></line><text class="chart-milestone-label" x="${margin.left + 4}" y="${y - 4}">${value >= 1000000 ? '1M' : `${value / 1000}K`}</text>`;
+      }).join('');
+
+      const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+      const areaPath = `${linePath} L ${points[points.length - 1].x} ${height - margin.bottom} L ${points[0].x} ${height - margin.bottom} Z`;
+
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="followerAreaGradient" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="rgba(83,252,24,0.55)" />
+            <stop offset="100%" stop-color="rgba(83,252,24,0.02)" />
+          </linearGradient>
+        </defs>
+        ${milestoneMarkup}
+        <path d="${areaPath}" fill="url(#followerAreaGradient)" opacity="0.85"></path>
+        <path d="${linePath}" fill="none" stroke="#53fc18" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+        ${points.map((point) => `
+          <circle
+            cx="${point.x}"
+            cy="${point.y}"
+            r="4.5"
+            fill="#53fc18"
+            stroke="#07110d"
+            stroke-width="2"
+            data-count="${point.count}"
+            data-date="${point.date}"
+          ></circle>
+        `).join('')}
+      `;
+
+      svg.querySelectorAll('circle').forEach((dot) => {
+        dot.addEventListener('mouseenter', (event) => {
+          const count = Number(dot.dataset.count) || 0;
+          const date = dot.dataset.date || '';
+          tooltip.innerHTML = `<strong>${count.toLocaleString()}</strong><br>${formatChartDate(date)}`;
+          tooltip.classList.remove('hidden');
+          const rect = svg.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const y = event.clientY - rect.top;
+          tooltip.style.left = `${x}px`;
+          tooltip.style.top = `${y}px`;
+        });
+
+        dot.addEventListener('mouseleave', () => tooltip.classList.add('hidden'));
+      });
+    }
+
+    function renderUsernameHistory() {
+      const usernameTimeline = document.getElementById('usernameTimeline');
+      const moreButton = document.getElementById('usernameMoreBtn');
+      usernameTimeline.innerHTML = '';
+
+      if (currentUsernameRows.length === 0) {
+        usernameTimeline.innerHTML = '<li class="empty-state">No username changes have been recorded.</li>';
+        moreButton.classList.add('hidden');
+        return;
+      }
+
+      currentUsernameRows.slice(0, usernameVisibleCount).forEach(row => {
+        const li = document.createElement('li');
+        li.className = 'timeline-item';
+        const name = document.createElement('span');
+        name.innerText = `@${row.history_slug} (${row.history_username})`;
+        const date = document.createElement('span');
+        date.className = 'timeline-date';
+        date.innerText = row.detected_at;
+        li.append(name, date);
+        usernameTimeline.appendChild(li);
+      });
+      moreButton.classList.toggle('hidden', usernameVisibleCount >= currentUsernameRows.length);
+    }
+
+    function renderSocialHistory() {
+      const socialsTimeline = document.getElementById('socialsTimeline');
+      const moreButton = document.getElementById('socialMoreBtn');
+      const filter = document.getElementById('historyFilter').value;
+      const filteredRows = filter === 'all' ? currentSocialRows : currentSocialRows.filter(row => row.field_name === filter);
+      socialsTimeline.innerHTML = '';
+
+      if (filteredRows.length === 0) {
+        socialsTimeline.innerHTML = `<li class="empty-state">No ${filter === 'all' ? 'social or bio changes' : `${filter} changes`} have been recorded.</li>`;
+        moreButton.classList.add('hidden');
+        return;
+      }
+
+      filteredRows.slice(0, socialVisibleCount).forEach(row => {
+        const li = document.createElement('li');
+        li.className = 'timeline-item socials-timeline-item';
+
+        const change = document.createElement('div');
+        change.className = 'timeline-change';
+        const title = document.createElement('div');
+        title.className = 'timeline-change-title';
+        title.append('Changed ');
+        const field = document.createElement('span');
+        field.className = 'field';
+        field.innerText = row.field_name;
+        title.appendChild(field);
+        change.appendChild(title);
+
+        [['From', row.old_value || 'None', 'old'], ['To', row.new_value || 'None', 'new']].forEach(([label, value, state]) => {
+          const valueRow = document.createElement('div');
+          valueRow.className = `timeline-value ${state}`;
+          const valueLabel = document.createElement('span');
+          valueLabel.className = 'timeline-value-label';
+          valueLabel.innerText = label;
+          const valueText = document.createElement('span');
+          valueText.className = 'timeline-value-text';
+          valueText.innerText = value;
+          valueRow.append(valueLabel, valueText);
+          change.appendChild(valueRow);
+        });
+
+        li.appendChild(change);
+        const date = document.createElement('span');
+        date.className = 'timeline-date';
+        date.innerText = row.detected_at;
+        li.appendChild(date);
+        socialsTimeline.appendChild(li);
+      });
+      moreButton.classList.toggle('hidden', socialVisibleCount >= filteredRows.length);
+    }
+
+    function renderChatHistory() {
+      const chatTimeline = document.getElementById('chatTimeline');
+      const moreButton = document.getElementById('chatMoreBtn');
+      chatTimeline.innerHTML = '';
+
+      if (currentChatRows.length === 0) {
+        chatTimeline.innerHTML = '<li class="empty-state">No saved chat messages for this user.</li>';
+        moreButton.classList.add('hidden');
+        return;
+      }
+
+      currentChatRows.slice(0, chatVisibleCount).forEach(row => {
+        const item = document.createElement('li');
+        item.className = 'chat-log-item';
+
+        const content = document.createElement('div');
+        content.className = 'chat-log-content';
+        content.innerText = row.content || '[non-text message]';
+
+        const meta = document.createElement('div');
+        meta.className = 'chat-log-meta';
+        const channel = document.createElement('span');
+        channel.className = 'chat-log-channel';
+        channel.innerText = `@${row.channel_slug || `channel ${row.chat_id}`}`;
+        const type = document.createElement('span');
+        type.className = 'chat-log-type';
+        type.innerText = row.message_type || 'message';
+        const date = document.createElement('span');
+        date.innerText = formatChartDate(row.created_at || row.saved_at);
+        meta.append(channel, type, date);
+
+        item.append(content, meta);
+        chatTimeline.appendChild(item);
+      });
+      moreButton.classList.toggle('hidden', chatVisibleCount >= currentChatRows.length);
     }
 
     function searchUser(explicitQuery, pushHistory = true) {
@@ -320,6 +892,7 @@
 
         if (historyRows.length === 0) {
           statusEl.innerText = `No records found for handle: "${queryHandle}"`;
+          showToast('No records found for that handle.');
           cardEl.classList.add('hidden');
           featuredEl.classList.remove('hidden');
           return;
@@ -340,6 +913,8 @@
         document.getElementById('avatarImg').src = channel.profile_pic || rawData.user?.profile_pic || 'https://kick.com/favicon.ico';
         document.getElementById('currentName').childNodes[0].nodeValue = `${channel.current_username} (@${channel.current_slug}) `;
         document.getElementById('channelIds').innerText = `Channel ID: ${channelId} | User ID: ${channel.user_id || 'N/A'}`;
+        const rawUpdatedAt = channel.last_updated || rawData.updated_at || rawData.last_updated || null;
+        document.getElementById('lastUpdated').innerText = `Last update: ${formatRelativeTime(rawUpdatedAt)}`;
         
         const isVerified = rawData.verified !== undefined ? Boolean(rawData.verified) : (Number(channel.verified) === 1 || channel.verified === true);
         const verifiedBadge = document.getElementById('verifiedBadge');
@@ -357,11 +932,11 @@
           monetizedBadge.innerText = 'Monetized ✖';
         }
 
-        const followersNum = rawData.followers_count !== undefined 
-          ? parseInt(String(rawData.followers_count).replace(/\D/g, ''), 10) || 0
-          : (rawData.followersCount !== undefined
-            ? parseInt(String(rawData.followersCount).replace(/\D/g, ''), 10) || 0
-            : (rawData.follower_count !== undefined 
+        const followersNum = rawData.followersCount !== undefined
+          ? parseInt(String(rawData.followersCount).replace(/\D/g, ''), 10) || 0
+          : (rawData.followers_count !== undefined
+            ? parseInt(String(rawData.followers_count).replace(/\D/g, ''), 10) || 0
+            : (rawData.follower_count !== undefined
               ? parseInt(String(rawData.follower_count).replace(/\D/g, ''), 10) || 0
               : parseInt(String(channel.followers_count || '0').replace(/\D/g, ''), 10) || 0));
 
@@ -390,12 +965,51 @@
 
         document.getElementById('statFollowers').innerText = followersNum.toLocaleString();
         
-        const isBanned = rawData.is_banned !== undefined ? Boolean(rawData.is_banned) : (Number(channel.is_banned) === 1 || channel.is_banned === true);
+        const isBanned = resolveBanStatus(rawData, channel);
         const bannedEl = document.getElementById('statBanned');
-        bannedEl.innerText = isBanned ? "Banned" : "Active";
-        bannedEl.style.color = isBanned ? "var(--danger-red)" : "var(--kick-green)";
-        
-        document.getElementById('statLive').innerText = channel.livestream_title ? channel.livestream_title : "Offline";
+
+        if (isBanned === null) {
+          bannedEl.innerText = 'Unknown';
+          bannedEl.style.color = 'var(--text-muted)';
+        } else if (isBanned) {
+          bannedEl.innerText = 'Banned';
+          bannedEl.style.color = 'var(--danger-red)';
+        } else {
+          bannedEl.innerText = 'Not Banned';
+          bannedEl.style.color = 'var(--kick-green)';
+        }
+
+        const liveBadge = document.getElementById('liveBadge');
+        const avatarWrapper = document.getElementById('avatarWrapper');
+        const livestream = rawData.livestream;
+        const liveTitle = (channel.livestream_title || livestream?.session_title || livestream?.title || '').trim();
+        const liveFlag = rawData.is_live ?? rawData.isLive ?? livestream?.is_live ?? livestream?.isLive;
+        const isLive = liveFlag === true || liveFlag === 1 || Boolean(liveTitle) || Boolean(livestream && liveFlag !== false && liveFlag !== 0);
+
+        if (isLive) {
+          avatarWrapper.classList.add('live-ring');
+          liveBadge.classList.remove('hidden');
+          liveBadge.innerHTML = '<span class="live-dot"></span> LIVE';
+          avatarWrapper.tabIndex = 0;
+          avatarWrapper.onclick = () => { window.open(`https://kick.com/${encodeURIComponent(channel.current_slug)}`, '_blank', 'noopener,noreferrer'); };
+          avatarWrapper.onkeydown = (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              avatarWrapper.click();
+            }
+          };
+        } else {
+          avatarWrapper.classList.remove('live-ring');
+          liveBadge.classList.add('hidden');
+          liveBadge.innerHTML = '<span class="live-dot"></span> LIVE';
+          avatarWrapper.tabIndex = -1;
+          avatarWrapper.onclick = null;
+          avatarWrapper.onkeydown = null;
+        }
+
+        if (liveTitle && isLive) {
+          liveBadge.title = liveTitle;
+        }
 
         const socialsContainer = document.getElementById('socialsContainer');
         socialsContainer.innerHTML = '';
@@ -445,14 +1059,9 @@
           socialsContainer.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">No connected socials.</span>';
         }
 
-        const usernameTimeline = document.getElementById('usernameTimeline');
-        usernameTimeline.innerHTML = '';
-        historyRows.forEach(row => {
-          const li = document.createElement('li');
-          li.className = 'timeline-item';
-          li.innerHTML = `<span>@${row.history_slug} <small>(${row.history_username})</small></span><span class="timeline-date">${row.detected_at}</span>`;
-          usernameTimeline.appendChild(li);
-        });
+        currentUsernameRows = [...historyRows].reverse();
+        usernameVisibleCount = 10;
+        renderUsernameHistory();
 
         const socialStmt = db.prepare(`SELECT field_name, old_value, new_value, detected_at FROM socials_history WHERE channel_id = ? ORDER BY detected_at DESC`);
         socialStmt.bind([channelId]);
@@ -461,27 +1070,60 @@
         while (socialStmt.step()) socialRows.push(socialStmt.getAsObject());
         socialStmt.free();
 
-        const socialsTimeline = document.getElementById('socialsTimeline');
-        socialsTimeline.innerHTML = '';
+        currentSocialRows = socialRows;
+        socialVisibleCount = 10;
+        renderSocialHistory();
 
-        if (socialRows.length === 0) {
-          socialsTimeline.innerHTML = '<li class="timeline-item"><span style="color:var(--text-muted);">No social modifications logged yet.</span></li>';
-        } else {
-          socialRows.forEach(row => {
-            const li = document.createElement('li');
-            li.className = 'timeline-item';
-            li.innerHTML = `<span>Changed <span class="field">${row.field_name}</span> from "${row.old_value || 'None'}" to "${row.new_value || 'None'}"</span><span class="timeline-date">${row.detected_at}</span>`;
-            socialsTimeline.appendChild(li);
-          });
-        }
+        const chatStmt = db.prepare(`
+          SELECT m.chat_id, m.content, m.message_type, m.created_at, m.saved_at,
+                 c.current_slug AS channel_slug
+          FROM chat_messages m
+          LEFT JOIN channels c ON c.id = m.chat_id
+          WHERE m.sender_user_id = ?
+          ORDER BY COALESCE(m.created_at, m.saved_at) DESC
+        `);
+        chatStmt.bind([channel.user_id || channel.channel_id]);
+        currentChatRows = [];
+        while (chatStmt.step()) currentChatRows.push(chatStmt.getAsObject());
+        chatStmt.free();
+        chatVisibleCount = 20;
+        renderChatHistory();
+
+        const followerHistoryQuery = `SELECT followers_count, recorded_at FROM follower_history WHERE channel_id = ? ORDER BY recorded_at ASC`;
+        const followerStmt = db.prepare(followerHistoryQuery);
+        followerStmt.bind([channelId]);
+
+        const followerRows = [];
+        while (followerStmt.step()) followerRows.push(followerStmt.getAsObject());
+        followerStmt.free();
+        currentFollowerRows = followerRows;
+        renderFollowerHistoryChart(getFollowerRowsForRange());
 
       } catch (err) {
         statusEl.innerText = `Search Error: ${err.message}`;
+        showToast('Could not load this profile.');
       }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('searchBtn').addEventListener('click', () => searchUser(null, true));
+      document.getElementById('followerRange').addEventListener('change', () => renderFollowerHistoryChart(getFollowerRowsForRange()));
+      document.getElementById('historyFilter').addEventListener('change', () => {
+        socialVisibleCount = 10;
+        renderSocialHistory();
+      });
+      document.getElementById('usernameMoreBtn').addEventListener('click', () => {
+        usernameVisibleCount += 10;
+        renderUsernameHistory();
+      });
+      document.getElementById('socialMoreBtn').addEventListener('click', () => {
+        socialVisibleCount += 10;
+        renderSocialHistory();
+      });
+      document.getElementById('chatMoreBtn').addEventListener('click', () => {
+        chatVisibleCount += 20;
+        renderChatHistory();
+      });
       document.getElementById('searchInput').addEventListener('keypress', (e) => { 
         if (e.key === 'Enter') searchUser(null, true); 
       });
@@ -501,8 +1143,9 @@
         }
       });
 
-      initDatabase();
+      initializeConsent();
     });
+
   </script>
 </body>
 </html>
