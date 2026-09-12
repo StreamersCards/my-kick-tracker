@@ -41,7 +41,7 @@
     .qol-tip { font-size: 0.8rem; color: var(--text-muted); background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); padding: 6px 12px; border-radius: 8px; }
 
     header { text-align: center; margin-bottom: 30px; animation: fadeInDown 0.6s ease-out; }
-    header h1 { font-size: 2.6rem; font-weight: 800; background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
+    header h1 { font-size: 2.6rem; font-weight: 800; background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
     header p { color: var(--text-muted); font-size: 1rem; }
 
     .search-box { display: flex; gap: 12px; background: var(--card-bg); border: 1px solid var(--card-border); padding: 8px; border-radius: 16px; backdrop-filter: blur(20px); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5); transition: all 0.3s ease; animation: fadeInUp 0.6s ease-out; }
@@ -281,7 +281,7 @@
         <div class="logo-icon">K</div>
         <span class="logo-text">KickIntel</span>
       </a>
-      <div class="qol-tip">Shortcut: Press <b>/</b> to search, <b>ESC</b> for home</div>
+      <a class="qol-tip" href="/users">Tracked users</a>
     </div>
 
     <header>
@@ -626,7 +626,8 @@
 
     function formatRelativeTime(value) {
       if (!value) return 'Unknown';
-      const date = new Date(value);
+      const date = parseStoredDate(value);
+      if (!Number.isFinite(date.getTime())) return 'Unknown';
       const diffMs = Date.now() - date.getTime();
       const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
 
@@ -648,7 +649,8 @@
 
     function formatChartDate(value) {
       if (!value) return 'Unknown';
-      const date = new Date(value);
+      const date = parseStoredDate(value);
+      if (!Number.isFinite(date.getTime())) return 'Unknown';
       return new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'short',
@@ -656,6 +658,11 @@
         hour: '2-digit',
         minute: '2-digit'
       }).format(date);
+    }
+
+    function parseStoredDate(value) {
+      const text = String(value);
+      return new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(text) ? text : `${text.replace(' ', 'T')}Z`);
     }
 
     function getFollowerRowsForRange() {
@@ -770,7 +777,7 @@
         name.innerText = `@${row.history_slug} (${row.history_username})`;
         const date = document.createElement('span');
         date.className = 'timeline-date';
-        date.innerText = row.detected_at;
+        date.innerText = formatChartDate(row.detected_at);
         li.append(name, date);
         usernameTimeline.appendChild(li);
       });
@@ -821,7 +828,7 @@
         li.appendChild(change);
         const date = document.createElement('span');
         date.className = 'timeline-date';
-        date.innerText = row.detected_at;
+          date.innerText = formatChartDate(row.detected_at);
         li.appendChild(date);
         socialsTimeline.appendChild(li);
       });

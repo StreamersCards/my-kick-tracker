@@ -14,7 +14,7 @@ const refreshLimits = fs.existsSync(refreshLimitPath)
   ? JSON.parse(fs.readFileSync(refreshLimitPath, 'utf8'))
   : {};
 
-const allowedPaths = new Set(['/','/index.html','/kick_tracker.db','/privacy.html','/terms.html']);
+const allowedPaths = new Set(['/','/index.html','/users','/users.html','/kick_tracker.db','/privacy.html','/terms.html']);
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -243,6 +243,11 @@ const server = createServer(async (req, res) => {
 
     if (pathname === '/' || pathname === '/index.html') {
       await serveFile('index.html', res);
+      return;
+    }
+
+    if (pathname === '/users' || pathname === '/users.html') {
+      await serveFile('users.html', res);
       return;
     }
 

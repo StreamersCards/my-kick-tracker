@@ -4,67 +4,39 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>404 - Page Not Found</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@600;800&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --bg: #07090e;
-      --card: rgba(15, 19, 28, 0.82);
-      --border: rgba(255,255,255,0.08);
-      --green: #53fc18;
-      --text: #f0f4f8;
-      --muted: #8a99ad;
-    }
+    :root { --bg: #07090e; --panel: rgba(15, 19, 28, 0.76); --border: rgba(255,255,255,0.09); --green: #53fc18; --green-glow: rgba(83,252,24,0.26); --cyan: #00f0ff; --text: #f0f4f8; --muted: #8a99ad; }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Arial, Helvetica, sans-serif;
-    }
-    .card {
-      width: min(90vw, 560px);
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 42px 28px;
-      text-align: center;
-      box-shadow: 0 30px 60px rgba(0,0,0,0.5);
-    }
-    .code {
-      font-size: clamp(3rem, 8vw, 6rem);
-      font-weight: 800;
-      color: var(--green);
-      letter-spacing: 0.08em;
-      margin-bottom: 12px;
-    }
-    h1 {
-      margin: 0 0 12px;
-      font-size: clamp(1.5rem, 3vw, 2.3rem);
-    }
-    p {
-      margin: 0 0 24px;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-    a {
-      display: inline-block;
-      background: var(--green);
-      color: #000;
-      text-decoration: none;
-      font-weight: 700;
-      padding: 12px 20px;
-      border-radius: 12px;
-    }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; }
+    body::before { content: ''; position: fixed; width: 560px; height: 560px; top: -260px; left: 12%; background: radial-gradient(circle, var(--green-glow), transparent 70%); filter: blur(80px); pointer-events: none; }
+    body::after { content: ''; position: fixed; width: 420px; height: 420px; right: -180px; bottom: -190px; background: radial-gradient(circle, rgba(0,240,255,0.09), transparent 70%); filter: blur(70px); pointer-events: none; }
+    .page { width: min(100% - 36px, 720px); text-align: center; animation: arrive 0.55s ease-out both; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font-weight: 800; margin-bottom: 28px; }
+    .brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--green); color: #000; box-shadow: 0 0 18px var(--green-glow); }
+    .card { padding: clamp(32px, 7vw, 64px) clamp(22px, 7vw, 70px); background: var(--panel); border: 1px solid var(--border); border-radius: 24px; backdrop-filter: blur(24px); box-shadow: 0 30px 80px rgba(0,0,0,0.58), 0 0 50px rgba(83,252,24,0.06); }
+    .code { color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: clamp(5rem, 18vw, 9rem); font-weight: 800; line-height: 0.95; letter-spacing: 0.04em; text-shadow: 0 0 24px var(--green-glow); }
+    h1 { margin: 22px 0 10px; font-size: clamp(1.5rem, 5vw, 2.35rem); }
+    p { max-width: 450px; margin: 0 auto 28px; color: var(--muted); line-height: 1.6; }
+    .home-link { display: inline-flex; align-items: center; justify-content: center; min-width: 150px; padding: 12px 20px; border: 1px solid var(--green); border-radius: 11px; background: var(--green); color: #000; text-decoration: none; font-weight: 800; box-shadow: 0 0 18px var(--green-glow); transition: transform 0.2s, box-shadow 0.2s; }
+    .home-link:hover { transform: translateY(-2px); box-shadow: 0 0 28px rgba(83,252,24,0.5); }
+    .hint { margin-top: 18px; color: var(--cyan); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; opacity: 0.8; }
+    @keyframes arrive { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @media (max-width: 560px) { .page { width: min(100% - 24px, 720px); } .card { border-radius: 18px; } }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="code">404</div>
-    <h1>Page Not Found</h1>
-    <p>The page you requested does not exist or is not available on this site.</p>
-    <a href="/">Return Home</a>
-  </div>
+  <main class="page">
+    <a class="brand" href="/"><span class="brand-mark">K</span><span>KickIntel</span></a>
+    <section class="card">
+      <div class="code">404</div>
+      <h1>Page Not Found</h1>
+      <p>The page you requested does not exist or is not available on this site.</p>
+      <a class="home-link" href="/">Return Home</a>
+      <div class="hint">ERROR · ROUTE NOT FOUND</div>
+    </section>
+  </main>
 </body>
 </html>

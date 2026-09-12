@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tracked Users - KickIntel</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+  <style>
+    :root { --bg: #07090e; --panel: #0f131c; --border: rgba(255,255,255,0.08); --green: #53fc18; --cyan: #00f0ff; --text: #f0f4f8; --muted: #8a99ad; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-family: Inter, Arial, sans-serif; }
+    .wrap { width: min(100% - 32px, 900px); margin: 0 auto; padding: 38px 0 60px; }
+    .nav { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 36px; }
+    .brand, .back { color: var(--text); text-decoration: none; font-weight: 800; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .logo { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--green); color: #000; }
+    .back { color: var(--cyan); font-size: 0.85rem; }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 5vw, 3rem); }
+    .intro { color: var(--muted); margin: 0 0 24px; }
+    .toolbar { display: flex; gap: 10px; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 8px; }
+    .toolbar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); padding: 12px; font-size: 1rem; }
+    .count { color: var(--muted); font-size: 0.82rem; margin: 14px 2px; }
+    .list { display: grid; gap: 8px; }
+    .user { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 16px; background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 11px; }
+    .user-name { color: var(--text); font-weight: 700; text-decoration: none; overflow-wrap: anywhere; }
+    .user-name:hover { color: var(--green); }
+    .user-meta { color: var(--muted); font-size: 0.75rem; margin-top: 4px; }
+    .user-followers { color: var(--green); font-weight: 700; font-size: 0.85rem; white-space: nowrap; }
+    .empty { color: var(--muted); padding: 20px 2px; }
+    .status { color: var(--muted); min-height: 22px; margin: 14px 2px; }
+    .consent { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; padding: 18px; background: rgba(3,5,9,0.9); }
+    .consent.hidden { display: none; }
+    .consent-panel { width: min(100%, 540px); background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 26px; }
+    .consent-panel p, .check { color: var(--muted); line-height: 1.5; font-size: 0.88rem; }
+    .check { display: flex; gap: 9px; align-items: flex-start; margin: 12px 0; color: var(--text); cursor: pointer; }
+    .check input { width: 17px; height: 17px; accent-color: var(--green); flex: 0 0 auto; }
+    .check a { color: var(--green); }
+    .agree { width: 100%; margin-top: 10px; padding: 11px; border: 0; border-radius: 9px; background: var(--green); color: #000; font-weight: 800; }
+    .agree:disabled { opacity: 0.45; }
+    @media (max-width: 600px) { .nav { align-items: flex-start; flex-direction: column; } .user { grid-template-columns: 1fr; } .user-followers { justify-self: start; } }
+  </style>
+</head>
+<body>
+  <div id="consentGate" class="consent" role="dialog" aria-modal="true">
+    <div class="consent-panel">
+      <h2>Review and agree to continue</h2>
+      <p>This directory uses the same public Kick profile and chat data as the main site.</p>
+      <label class="check"><input id="termsConsent" type="checkbox" /> <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener noreferrer">Terms of Use</a>.</span></label>
+      <label class="check"><input id="privacyConsent" type="checkbox" /> <span>I acknowledge the <a href="/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
+      <button id="agree" class="agree" type="button" disabled>Agree and continue</button>
+    </div>
+  </div>
+  <main class="wrap">
+    <nav class="nav"><a class="brand" href="/"><span class="logo">K</span> KickIntel</a><a class="back" href="/">Back to tracker</a></nav>
+    <h1>Tracked Users</h1>
+    <p class="intro">Every channel and chatter profile saved in the database, newest additions first.</p>
+    <div class="toolbar"><input id="search" type="search" placeholder="Search users by username or tag..." autocomplete="off" /></div>
+    <div id="status" class="status">Loading database...</div>
+    <div id="count" class="count"></div>
+    <div id="list" class="list"></div>
+  </main>
+  <script>
+    const TERMS_VERSION = '2026-09-12.2';
+    const PRIVACY_VERSION = '2026-09-12.3';
+    const CONSENT_KEY = 'kickintel-consent';
+    let users = [];
+
+    function hasConsent() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(CONSENT_KEY) || 'null');
+        return saved?.termsVersion === TERMS_VERSION && saved?.privacyVersion === PRIVACY_VERSION;
+      } catch (error) { return false; }
+    }
+
+    function start() {
+      const gate = document.getElementById('consentGate');
+      const terms = document.getElementById('termsConsent');
+      const privacy = document.getElementById('privacyConsent');
+      const agree = document.getElementById('agree');
+      if (hasConsent()) { gate.classList.add('hidden'); loadUsers(); return; }
+      const update = () => { agree.disabled = !(terms.checked && privacy.checked); };
+      terms.addEventListener('change', update);
+      privacy.addEventListener('change', update);
+      agree.addEventListener('click', () => {
+        localStorage.setItem(CONSENT_KEY, JSON.stringify({ termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION, acceptedAt: new Date().toISOString() }));
+        gate.classList.add('hidden');
+        loadUsers();
+      });
+    }
+
+    async function loadUsers() {
+      const status = document.getElementById('status');
+      try {
+        const SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}` });
+        const response = await fetch('/kick_tracker.db', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Database unavailable.');
+        const database = new SQL.Database(new Uint8Array(await response.arrayBuffer()));
+        const statement = database.prepare(`
+          SELECT c.id, c.current_slug, c.current_username, c.followers_count, c.last_updated,
+                 (SELECT MIN(h.id) FROM username_history h WHERE h.channel_id = c.id) AS added_order
+          FROM channels c
+          ORDER BY added_order DESC, c.id DESC
+        `);
+        while (statement.step()) users.push(statement.getAsObject());
+        statement.free();
+        database.close();
+        status.innerText = '';
+        renderUsers();
+      } catch (error) { status.innerText = error.message; }
+    }
+
+    function renderUsers() {
+      const query = document.getElementById('search').value.trim().toLowerCase();
+      const matches = users.filter(user => `${user.current_username || ''} ${user.current_slug || ''}`.toLowerCase().includes(query));
+      document.getElementById('count').innerText = `${matches.length.toLocaleString()} of ${users.length.toLocaleString()} users`;
+      const list = document.getElementById('list');
+      list.innerHTML = '';
+      if (!matches.length) { list.innerHTML = '<div class="empty">No users match your search.</div>'; return; }
+      matches.forEach(user => {
+        const row = document.createElement('div');
+        row.className = 'user';
+        const info = document.createElement('div');
+        const link = document.createElement('a');
+        link.className = 'user-name';
+        link.href = `/?user=${encodeURIComponent(user.current_slug || user.current_username || '')}`;
+        link.innerText = `${user.current_username || user.current_slug || 'Unknown user'} (@${user.current_slug || 'unknown'})`;
+        const meta = document.createElement('div');
+        meta.className = 'user-meta';
+        meta.innerText = `Channel ID: ${user.id} · Last update: ${formatLocalDate(user.last_updated)}`;
+        info.append(link, meta);
+        const followers = document.createElement('div');
+        followers.className = 'user-followers';
+        followers.innerText = `${Number(user.followers_count || 0).toLocaleString()} followers`;
+        row.append(info, followers);
+        list.appendChild(row);
+      });
+    }
+
+    function formatLocalDate(value) {
+      if (!value) return 'Unknown';
+      const text = String(value);
+      const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(text) ? text : `${text.replace(' ', 'T')}Z`);
+      if (!Number.isFinite(date.getTime())) return 'Unknown';
+      return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+    }
+
+    document.getElementById('search').addEventListener('input', renderUsers);
+    start();
+  </script>
+</body>
+</html>
