@@ -1,9 +1,10 @@
-name: Kick Chat Collector (5 min)
+name: Kick Chat Collector (15 min x3)
 
 on:
   schedule:
-    # Every 5 minutes: poll streamers.txt for live status + save chat messages/users.
-    - cron: '*/5 * * * *'
+    # Every 15 min (reliable tier): each run polls 3x at 5-min spacing,
+    # so chat granularity stays 5 min without relying on flaky */5 cron.
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -31,33 +32,42 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
-      - name: Collect Live Chat
-        run: npm run check-streamers
-
-      - name: Commit and Push Chat Data
+      - name: Collect Live Chat (3x, 5 min apart)
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-          git add -f kick_tracker.db logz.txt
+          push_chat_data() {
+            git add -f kick_tracker.db logz.txt
 
-          if git diff --staged --quiet; then
-            echo "No changes to push."
-            exit 0
-          fi
-
-          git commit -m "auto: chat messages update [skip ci]"
-
-          # Safety net: if main moved while we worked, rebase and retry.
-          for attempt in 1 2 3; do
-            if git push origin main; then
-              break
+            if git diff --staged --quiet; then
+              echo "No changes to push."
+              return 0
             fi
-            echo "Push rejected (attempt $attempt). Rebasing onto latest main..."
-            git pull --rebase origin main
-            sleep 5
-            if [ "$attempt" = "3" ]; then
-              echo "Push failed after 3 attempts."
-              exit 1
+
+            git commit -m "auto: chat messages update [skip ci]"
+
+            # Safety net: if main moved while we worked, rebase and retry.
+            for attempt in 1 2 3; do
+              if git push origin main; then
+                return 0
+              fi
+              echo "Push rejected (attempt $attempt). Rebasing onto latest main..."
+              git pull --rebase origin main
+              sleep 5
+              if [ "$attempt" = "3" ]; then
+                echo "Push failed after 3 attempts."
+                return 1
+              fi
+            done
+          }
+
+          for poll in 1 2 3; do
+            echo "=== Poll $poll of 3 ==="
+            npm run check-streamers
+            push_chat_data || exit 1
+            if [ "$poll" != "3" ]; then
+              echo "Sleeping 5 minutes before next poll..."
+              sleep 300
             fi
           done
