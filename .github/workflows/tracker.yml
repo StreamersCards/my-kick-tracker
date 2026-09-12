@@ -1,9 +1,9 @@
-name: Kick Puppeteer Tracker
+name: Kick Streamer Monitor
 
 on:
   schedule:
-    # Runs every 6 hours
-    - cron: '0 */6 * * *'
+    # GitHub may delay scheduled jobs, but this requests a check every 5 minutes.
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Allows manual trigger from GitHub Actions UI
 
 permissions:
@@ -12,6 +12,9 @@ permissions:
 jobs:
   scrape-and-update:
     runs-on: ubuntu-latest
+    concurrency:
+      group: kick-streamer-monitor
+      cancel-in-progress: false
 
     steps:
       - name: Checkout Repository
@@ -28,19 +31,14 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
-      - name: Run Kick Tracker Scraper
-        run: node tracker.js
+      - name: Check Streamers and Save Chat
+        run: npm run check-streamers
 
       - name: Commit and Push Database & IDs
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          # Pull remote updates gracefully
-          git pull --no-rebase origin main || true
+          git add -f kick_tracker.db logz.txt
           
-          # Force add database and ID registry to guarantee tracking
-          git add -f kick_tracker.db ids.txt
-          
-          # Commit and push changes
-          git diff --staged --quiet || (git commit -m "auto: update tracker database and ids.txt [skip ci]" && git push origin main)
+          git diff --staged --quiet || (git commit -m "auto: update streamer chat logs [skip ci]" && git push origin main)

@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node tracker.js --monitor",
     "run-once": "node tracker.js",
+    "check-streamers": "node tracker.js --check-streamers",
     "monitor": "node tracker.js --monitor",
     "serve": "node server.js"
   },

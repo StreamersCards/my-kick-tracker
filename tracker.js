@@ -496,6 +496,12 @@ async function main() {
     return;
   }
 
+  if (process.argv[2] === '--check-streamers') {
+    await checkStreamerTagsOnce();
+    db.close();
+    return;
+  }
+
   const refreshTarget = process.argv[2] === '--refresh' ? process.argv[3] : null;
   const targetsFile = fs.existsSync('./targets.txt') ? fs.readFileSync('./targets.txt', 'utf8') : '';
   const rawTargets = refreshTarget
@@ -630,22 +636,7 @@ async function monitorTargets() {
   console.log('[MONITOR] Live chat is collected only while Kick reports a streamer as live.');
 
   while (!stopping) {
-    const tags = getStreamerTags();
-    console.log(`[MONITOR] Checking ${tags.length} unique streamer tags...`);
-
-    for (const tag of tags) {
-      if (stopping) break;
-      try {
-        const payload = await fetchChannelByTag(tag);
-        await processChannelPayload(payload);
-        const chatResult = await collectAndLogChat(payload, tag);
-        if (chatResult.savedMessages || chatResult.discoveredUsers) {
-          console.log(`[CHAT] @${payload.slug || tag}: saved ${chatResult.savedMessages} messages, discovered ${chatResult.discoveredUsers} users`);
-        }
-      } catch (error) {
-        console.warn(`[MONITOR] @${tag}: ${error.message}`);
-      }
-    }
+    await checkStreamerTagsOnce(() => stopping);
 
     if (!stopping) {
       await new Promise(resolve => setTimeout(resolve, intervalMs));
@@ -654,6 +645,25 @@ async function monitorTargets() {
 
   db.close();
   console.log('[MONITOR] Stopped. Historical data was preserved.');
+}
+
+async function checkStreamerTagsOnce(shouldStop = () => false) {
+  const tags = getStreamerTags();
+  console.log(`[MONITOR] Checking ${tags.length} unique streamer tags...`);
+
+  for (const tag of tags) {
+    if (shouldStop()) break;
+    try {
+      const payload = await fetchChannelByTag(tag);
+      await processChannelPayload(payload);
+      const chatResult = await collectAndLogChat(payload, tag);
+      if (chatResult.savedMessages || chatResult.discoveredUsers) {
+        console.log(`[CHAT] @${payload.slug || tag}: saved ${chatResult.savedMessages} messages, discovered ${chatResult.discoveredUsers} users`);
+      }
+    } catch (error) {
+      console.warn(`[MONITOR] @${tag}: ${error.message}`);
+    }
+  }
 }
 
 main();
