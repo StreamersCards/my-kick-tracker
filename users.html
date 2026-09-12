@@ -45,13 +45,13 @@
     <div class="consent-panel">
       <h2>Review and agree to continue</h2>
       <p>This directory uses the same public Kick profile and chat data as the main site.</p>
-      <label class="check"><input id="termsConsent" type="checkbox" /> <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener noreferrer">Terms of Use</a>.</span></label>
-      <label class="check"><input id="privacyConsent" type="checkbox" /> <span>I acknowledge the <a href="/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
+      <label class="check"><input id="termsConsent" type="checkbox" /> <span>I agree to the <a href="./terms.html" target="_blank" rel="noopener noreferrer">Terms of Use</a>.</span></label>
+      <label class="check"><input id="privacyConsent" type="checkbox" /> <span>I acknowledge the <a href="./privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
       <button id="agree" class="agree" type="button" disabled>Agree and continue</button>
     </div>
   </div>
   <main class="wrap">
-    <nav class="nav"><a class="brand" href="/"><span class="logo">K</span> KickIntel</a><a class="back" href="/">Back to tracker</a></nav>
+    <nav class="nav"><a class="brand" href="./"><span class="logo">K</span> KickIntel</a><a class="back" href="./">Back to tracker</a></nav>
     <h1>Tracked Users</h1>
     <p class="intro">Every channel and chatter profile saved in the database, newest additions first.</p>
     <div class="toolbar"><input id="search" type="search" placeholder="Search users by username or tag..." autocomplete="off" /></div>
@@ -92,7 +92,7 @@
       const status = document.getElementById('status');
       try {
         const SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}` });
-        const response = await fetch('/kick_tracker.db', { cache: 'no-store' });
+        const response = await fetch('./kick_tracker.db', { cache: 'no-store' });
         if (!response.ok) throw new Error('Database unavailable.');
         const database = new SQL.Database(new Uint8Array(await response.arrayBuffer()));
         const statement = database.prepare(`
@@ -122,7 +122,7 @@
         const info = document.createElement('div');
         const link = document.createElement('a');
         link.className = 'user-name';
-        link.href = `/?user=${encodeURIComponent(user.current_slug || user.current_username || '')}`;
+        link.href = `./?user=${encodeURIComponent(user.current_slug || user.current_username || '')}`;
         link.innerText = `${user.current_username || user.current_slug || 'Unknown user'} (@${user.current_slug || 'unknown'})`;
         const meta = document.createElement('div');
         meta.className = 'user-meta';
