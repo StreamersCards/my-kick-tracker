@@ -6,6 +6,7 @@
     "start": "node tracker.js --monitor",
     "run-once": "node tracker.js",
     "check-streamers": "node tracker.js --check-streamers",
+    "refresh-all": "node tracker.js --refresh-all",
     "monitor": "node tracker.js --monitor",
     "serve": "node server.js"
   },

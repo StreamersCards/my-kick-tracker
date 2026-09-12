@@ -183,6 +183,52 @@ function getPayloadFollowerCount(rawPayload) {
 }
 
 async function repairCurrentFollowerSnapshots() {
+  // One-time cleanup: collapse pre-existing spam (many rows per day) down to
+  // the first snapshot per channel per day, so the DB shrinks and graphs stay clean.
+  await runQuery(`
+    DELETE FROM follower_history
+    WHERE id NOT IN (
+      SELECT MIN(id)
+      FROM follower_history
+      GROUP BY channel_id, DATE(recorded_at)
+    )
+  `);
+
+  // One-time shrink: replace fat legacy channels.raw_payload blobs (~14KB avg)
+  // with the slim form (~300B) going forward. Keeps is_banned-gated repair working
+  // because the slim payload still contains the is_banned key.
+  const fatChannels = await allQuery(`
+    SELECT id, raw_payload FROM channels WHERE LENGTH(raw_payload) > 2000
+  `);
+  for (const channel of fatChannels) {
+    let slim = null;
+    try {
+      const p = JSON.parse(channel.raw_payload);
+      const u = p.user || {};
+      const ls = p.livestream || null;
+      slim = JSON.stringify({
+        is_banned: p.is_banned ?? null,
+        is_live: ls ? true : (p.is_live ?? null),
+        verified: p.verified ? true : undefined,
+        subscription_enabled: Boolean(p.subscription_enabled || p.is_affiliate),
+        vod_enabled: Boolean(p.vod_enabled),
+        vod_settings: p.vod_settings ? { enabled: Boolean(p.vod_settings.enabled) } : undefined,
+        followersCount: Number.parseInt(String(p.followersCount ?? p.followers_count ?? 0), 10) || 0,
+        followers_count: Number.parseInt(String(p.followersCount ?? p.followers_count ?? 0), 10) || 0,
+        user: { profile_pic: u.profile_pic || null },
+        livestream: ls ? {
+          is_live: true,
+          session_title: ls.session_title || null,
+          title: ls.title || null,
+          viewer_count: ls.viewer_count ?? null,
+        } : null,
+      });
+    } catch {
+      continue;
+    }
+    if (slim) await runQuery('UPDATE channels SET raw_payload = ? WHERE id = ?', [slim, channel.id]);
+  }
+
   const channels = await allQuery(`
     SELECT id, followers_count, raw_payload
     FROM channels
@@ -198,14 +244,17 @@ async function repairCurrentFollowerSnapshots() {
     }
 
     const latestSnapshot = await getQuery(`
-      SELECT followers_count
+      SELECT followers_count, recorded_at
       FROM follower_history
       WHERE channel_id = ?
       ORDER BY recorded_at DESC, id DESC
       LIMIT 1
     `, [channel.id]);
 
-    if (!latestSnapshot || Number(latestSnapshot.followers_count) !== payloadCount) {
+    const today = new Date().toISOString().slice(0, 10);
+    const latestDay = latestSnapshot?.recorded_at ? String(latestSnapshot.recorded_at).slice(0, 10) : null;
+
+    if (!latestSnapshot || (Number(latestSnapshot.followers_count) !== payloadCount && latestDay !== today)) {
       await runQuery('INSERT INTO follower_history (channel_id, followers_count) VALUES (?, ?)', [channel.id, payloadCount]);
     }
   }
@@ -230,7 +279,29 @@ async function processChannelPayload(data) {
   const vodEnabled = (data.vod_enabled === true || (data.vod_enabled !== false && data.vod_enabled !== 0)) ? 1 : 0;
 
   const livestreamTitle = data.livestream ? data.livestream.session_title : null;
-  const rawPayload = JSON.stringify(data);
+  // Slim payload: keep only what the frontend/tracker actually read.
+  // Drops the fat junk: previous_livestreams (~60%), playback_url (1KB JWT),
+  // recent_categories banners/descriptions, subscriber_badges, ascending_links,
+  // media/offline_banner srcsets, chatroom slow-mode flags.
+  // NOTE: is_affiliate is already folded into subscriptionEnabled above, so it
+  // is intentionally not kept here.
+  const rawPayload = JSON.stringify({
+    is_banned: data.is_banned ?? null,
+    is_live: data.livestream ? true : (data.is_live ?? null),
+    verified: data.verified ? true : undefined,
+    subscription_enabled: Boolean(data.subscription_enabled || data.is_affiliate),
+    vod_enabled: Boolean(data.vod_enabled),
+    vod_settings: data.vod_settings ? { enabled: Boolean(data.vod_settings.enabled) } : undefined,
+    followersCount,
+    followers_count: followersCount,
+    user: { profile_pic: userObj.profile_pic || null },
+    livestream: data.livestream ? {
+      is_live: true,
+      session_title: data.livestream.session_title || null,
+      title: data.livestream.title || null,
+      viewer_count: data.livestream.viewer_count ?? null,
+    } : null,
+  });
 
   const bio = userObj.bio || "";
   const instagram = userObj.instagram || "";
@@ -309,11 +380,26 @@ async function processChannelPayload(data) {
     ]);
   }
 
-  // Save every fetch as a historical follower snapshot for graphing.
-  await runQuery(`
-    INSERT INTO follower_history (channel_id, followers_count)
-    VALUES (?, ?)
-  `, [channelId, followersCount]);
+  // Follower snapshot: at most 1 row per channel per day, and only when the count changed.
+  // This keeps graph history without spamming ~2,400 identical rows/day.
+  const latestSnapshot = await getQuery(`
+    SELECT followers_count, recorded_at
+    FROM follower_history
+    WHERE channel_id = ?
+    ORDER BY recorded_at DESC, id DESC
+    LIMIT 1
+  `, [channelId]);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const latestDay = latestSnapshot?.recorded_at ? String(latestSnapshot.recorded_at).slice(0, 10) : null;
+  const countChanged = !latestSnapshot || Number(latestSnapshot.followers_count) !== followersCount;
+
+  if (!latestSnapshot || (countChanged && latestDay !== today)) {
+    await runQuery(`
+      INSERT INTO follower_history (channel_id, followers_count)
+      VALUES (?, ?)
+    `, [channelId, followersCount]);
+  }
 
   return channelId;
 }
@@ -361,6 +447,23 @@ async function saveChatHistory(chatId, historyPayload) {
     }
 
     if (!message.id) continue;
+    // Slim chat payload: keep only the reply-chain fields the frontend renders
+    // (getReplyChain/parseReplyMetadata). Drops the sender-identity echo (~700B → ~100B).
+    // NOTE: chat_users.raw_identity keeps the full sender object (one row per user, tiny).
+    const replySource = message.original_message
+      || (typeof message.metadata === 'object' && message.metadata !== null ? message.metadata.original_message : null)
+      || (() => { try {
+        const meta = typeof message.metadata === 'string' ? JSON.parse(message.metadata) : null;
+        return meta?.original_message || null;
+      } catch { return null; } })();
+    const slimChatPayload = JSON.stringify({
+      id: message.id,
+      content: message.content || '',
+      created_at: message.created_at || null,
+      sender: { id: senderId, username: sender.username || null, slug: sender.slug || null },
+      ...(replySource ? { original_message: replySource } : {}),
+      ...(typeof message.metadata === 'string' ? { metadata: message.metadata } : {}),
+    });
     const result = await runQuery(`
       INSERT OR IGNORE INTO chat_messages (
         message_id, chat_id, sender_user_id, sender_slug, sender_username,
@@ -375,7 +478,7 @@ async function saveChatHistory(chatId, historyPayload) {
       message.content || '',
       message.type || 'message',
       message.created_at || null,
-      JSON.stringify(message)
+      slimChatPayload
     ]);
     if (result.changes > 0) savedMessages += 1;
   }
@@ -471,15 +574,87 @@ async function getKnownTrackedHandles() {
 
 import fs from 'fs';
 
+const BACKUP_KEEP_COUNT = 2;
+const BACKUP_MIN_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // once a week
+
+function getBackupFiles() {
+  if (!fs.existsSync('./backups')) return [];
+  return fs.readdirSync('./backups')
+    .filter(name => name.startsWith('kick_tracker-') && name.endsWith('.db'))
+    .map(name => {
+      const fullPath = `./backups/${name}`;
+      try {
+        return { name, fullPath, mtimeMs: fs.statSync(fullPath).mtimeMs };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.mtimeMs - a.mtimeMs); // newest first
+}
+
+function pruneOldBackups() {
+  const files = getBackupFiles();
+  const extras = files.slice(BACKUP_KEEP_COUNT);
+  for (const file of extras) {
+    try {
+      fs.unlinkSync(file.fullPath);
+      console.log(`[DB] Pruned old backup: ${file.fullPath}`);
+    } catch (error) {
+      console.warn(`[DB] Could not prune backup ${file.fullPath}:`, error.message);
+    }
+  }
+}
+
 function createDatabaseBackup() {
   if (!fs.existsSync('./kick_tracker.db')) return null;
 
   fs.mkdirSync('./backups', { recursive: true });
+
+  const existing = getBackupFiles();
+
+  // Only back up once a week: skip if the newest backup is fresh.
+  if (existing.length > 0 && (Date.now() - existing[0].mtimeMs) < BACKUP_MIN_INTERVAL_MS) {
+    pruneOldBackups(); // still enforce the 2-file limit on every run
+    return null;
+  }
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backupPath = `./backups/kick_tracker-${timestamp}.db`;
   fs.copyFileSync('./kick_tracker.db', backupPath);
   console.log(`[DB] Backup created: ${backupPath}`);
+
+  pruneOldBackups(); // keep only the current + latest backup
   return backupPath;
+}
+
+async function refreshAllTrackedUsers() {
+  const rows = await allQuery(`
+    SELECT current_slug
+    FROM channels
+    WHERE current_slug IS NOT NULL AND current_slug != ''
+    ORDER BY id ASC
+  `);
+  console.log(`[REFRESH-ALL] Refreshing ${rows.length} tracked users (profile data only, no chat)...`);
+
+  let ok = 0;
+  let failed = 0;
+  for (const row of rows) {
+    const tag = String(row.current_slug).toLowerCase().replace(/^@/, '').trim();
+    if (!tag) continue;
+    try {
+      const payload = await fetchChannelByTag(tag);
+      await processChannelPayload(payload);
+      ok += 1;
+    } catch (error) {
+      failed += 1;
+      console.warn(`[REFRESH-ALL] @${tag}: ${error.message}`);
+    }
+    // Small pause to stay friendly to the Kick API.
+    await new Promise(resolve => setTimeout(resolve, 400));
+  }
+
+  console.log(`[REFRESH-ALL] Done. Updated: ${ok}, failed: ${failed}.`);
 }
 
 async function main() {
@@ -498,6 +673,12 @@ async function main() {
 
   if (process.argv[2] === '--check-streamers') {
     await checkStreamerTagsOnce();
+    db.close();
+    return;
+  }
+
+  if (process.argv[2] === '--refresh-all') {
+    await refreshAllTrackedUsers();
     db.close();
     return;
   }

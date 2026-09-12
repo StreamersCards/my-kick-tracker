@@ -1,0 +1,63 @@
+name: Kick Full User Refresh (3h)
+
+on:
+  schedule:
+    # Every 3 hours: refresh profile data for EVERY user in the DB (followers, bio, socials, ban status).
+    - cron: '7 */3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-all-users:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: kick-db-writer
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Refresh All Tracked Users
+        run: npm run refresh-all
+
+      - name: Commit and Push Fresh Data
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          git add -f kick_tracker.db
+
+          if git diff --staged --quiet; then
+            echo "No changes to push."
+            exit 0
+          fi
+
+          git commit -m "auto: full user refresh [skip ci]"
+
+          # Safety net: if main moved while we worked, rebase and retry.
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              break
+            fi
+            echo "Push rejected (attempt $attempt). Rebasing onto latest main..."
+            git pull --rebase origin main
+            sleep 5
+            if [ "$attempt" = "3" ]; then
+              echo "Push failed after 3 attempts."
+              exit 1
+            fi
+          done
