@@ -1,0 +1,9 @@
+# Streamers monitored continuously for live status and public chat.
+# Put one Kick tag per line. The @ symbol is optional.
+# Example:
+# odedsvr
+# xqc
+odedsvr
+psyqr
+igz
+partizanktv

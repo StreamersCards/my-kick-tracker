@@ -423,6 +423,31 @@ async function fetchLiveChatHistory(data) {
   return saveChatHistory(chatId, payload);
 }
 
+function appendChatLog(tag, message) {
+  const timestamp = new Date().toISOString();
+  fs.appendFileSync('./logz.txt', `${timestamp} [Chat][${tag}] ${message}\n`, 'utf8');
+}
+
+async function collectAndLogChat(data, fallbackTag) {
+  const tag = data?.slug || fallbackTag || String(data?.id || 'unknown');
+  const displayTag = tag.charAt(0).toUpperCase() + tag.slice(1);
+  const live = isLiveChannelPayload(data);
+
+  if (!live) {
+    appendChatLog(displayTag, 'offline - messages added: 0, new users: 0');
+    return { savedMessages: 0, discoveredUsers: 0 };
+  }
+
+  try {
+    const result = await fetchLiveChatHistory(data);
+    appendChatLog(displayTag, `live - messages added: ${result.savedMessages}, new users: ${result.discoveredUsers}`);
+    return result;
+  } catch (error) {
+    appendChatLog(displayTag, `error - ${error.message}`);
+    throw error;
+  }
+}
+
 async function getKnownTrackedHandles() {
   const rows = await allQuery(`
     SELECT DISTINCT LOWER(current_slug) AS slug, LOWER(current_username) AS username
@@ -515,7 +540,7 @@ async function main() {
       if (!data || !data.id) throw new Error('Kick returned an invalid channel payload');
       await processChannelPayload(data);
       try {
-        const chatResult = await fetchLiveChatHistory(data);
+        const chatResult = await collectAndLogChat(data, refreshTarget);
         if (chatResult.savedMessages || chatResult.discoveredUsers) {
           console.log(`[CHAT] Saved ${chatResult.savedMessages} messages and discovered ${chatResult.discoveredUsers} users for @${data.slug}`);
         }
@@ -552,7 +577,7 @@ async function main() {
       if (data && data.id) {
         await processChannelPayload(data);
         try {
-          const chatResult = await fetchLiveChatHistory(data);
+          const chatResult = await collectAndLogChat(data, target);
           if (chatResult.savedMessages || chatResult.discoveredUsers) {
             console.log(`[CHAT] Saved ${chatResult.savedMessages} messages and discovered ${chatResult.discoveredUsers} users for @${data.slug}`);
           }
@@ -572,12 +597,12 @@ async function main() {
   console.log("Tracking iteration finished successfully.");
 }
 
-function getTargetTags() {
-  const targetsFile = fs.existsSync('./targets.txt') ? fs.readFileSync('./targets.txt', 'utf8') : '';
+function getStreamerTags() {
+  const streamersFile = fs.existsSync('./streamers.txt') ? fs.readFileSync('./streamers.txt', 'utf8') : '';
   const seen = new Set();
-  return targetsFile.split('\n')
+  return streamersFile.split('\n')
     .map(target => target.toLowerCase().replace(/^@/, '').trim())
-    .filter(target => target && !seen.has(target) && seen.add(target));
+    .filter(target => target && !target.startsWith('#') && !seen.has(target) && seen.add(target));
 }
 
 async function fetchChannelByTag(tag) {
@@ -601,11 +626,11 @@ async function monitorTargets() {
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
 
-  console.log(`[MONITOR] Watching targets.txt every ${Math.round(intervalMs / 1000)} seconds.`);
+  console.log(`[MONITOR] Watching streamers.txt every ${Math.round(intervalMs / 1000)} seconds.`);
   console.log('[MONITOR] Live chat is collected only while Kick reports a streamer as live.');
 
   while (!stopping) {
-    const tags = getTargetTags();
+    const tags = getStreamerTags();
     console.log(`[MONITOR] Checking ${tags.length} unique streamer tags...`);
 
     for (const tag of tags) {
@@ -613,7 +638,7 @@ async function monitorTargets() {
       try {
         const payload = await fetchChannelByTag(tag);
         await processChannelPayload(payload);
-        const chatResult = await fetchLiveChatHistory(payload);
+        const chatResult = await collectAndLogChat(payload, tag);
         if (chatResult.savedMessages || chatResult.discoveredUsers) {
           console.log(`[CHAT] @${payload.slug || tag}: saved ${chatResult.savedMessages} messages, discovered ${chatResult.discoveredUsers} users`);
         }

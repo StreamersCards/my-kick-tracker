@@ -170,10 +170,18 @@
     .empty-state { color: var(--text-muted); font-size: 0.85rem; padding: 14px 2px; }
     .chat-log-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
     .chat-log-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 12px 14px; }
-    .chat-log-content { min-width: 0; color: var(--text-main); line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .chat-log-content { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; color: var(--text-main); line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .chat-log-emote { width: 28px; height: 28px; object-fit: contain; vertical-align: middle; }
     .chat-log-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; }
     .chat-log-channel { color: var(--accent-blue); font-weight: 700; }
     .chat-log-type { color: var(--text-muted); text-transform: uppercase; font-size: 0.65rem; }
+    .chat-log-actions { grid-column: 1 / -1; display: flex; }
+    .reply-toggle { background: transparent; border: 0; color: var(--accent-blue); padding: 0; cursor: pointer; font-size: 0.75rem; }
+    .reply-toggle:hover { text-decoration: underline; }
+    .reply-thread { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 7px; border-left: 2px solid rgba(0, 240, 255, 0.35); padding-left: 12px; margin-top: 2px; }
+    .reply-thread.hidden { display: none; }
+    .reply-thread-item { display: flex; flex-direction: column; gap: 3px; background: rgba(0, 240, 255, 0.04); border-radius: 7px; padding: 8px 10px; }
+    .reply-thread-meta { color: var(--text-muted); font-size: 0.7rem; }
     @media (max-width: 650px) {
       .chat-log-item { grid-template-columns: 1fr; }
       .chat-log-meta { align-items: flex-start; }
@@ -837,7 +845,7 @@
 
         const content = document.createElement('div');
         content.className = 'chat-log-content';
-        content.innerText = row.content || '[non-text message]';
+        appendChatContent(content, row.content || '[non-text message]');
 
         const meta = document.createElement('div');
         meta.className = 'chat-log-meta';
@@ -852,9 +860,87 @@
         meta.append(channel, type, date);
 
         item.append(content, meta);
+
+        const replyChain = getReplyChain(row);
+        if (replyChain.length > 1) {
+          const actions = document.createElement('div');
+          actions.className = 'chat-log-actions';
+          const toggle = document.createElement('button');
+          toggle.className = 'reply-toggle';
+          toggle.type = 'button';
+          toggle.innerText = `View reply thread (${replyChain.length} messages)`;
+          const thread = document.createElement('div');
+          thread.className = 'reply-thread hidden';
+          renderReplyChain(thread, replyChain);
+          toggle.addEventListener('click', () => {
+            const isHidden = thread.classList.toggle('hidden');
+            toggle.innerText = `${isHidden ? 'View' : 'Hide'} reply thread (${replyChain.length} messages)`;
+          });
+          actions.appendChild(toggle);
+          item.append(actions, thread);
+        }
         chatTimeline.appendChild(item);
       });
       moreButton.classList.toggle('hidden', chatVisibleCount >= currentChatRows.length);
+    }
+
+    function appendChatContent(container, message) {
+      const emotePattern = /\[emote:(\d+):([^\]]+)\]/g;
+      let cursor = 0;
+      let match;
+
+      while ((match = emotePattern.exec(message)) !== null) {
+        if (match.index > cursor) container.appendChild(document.createTextNode(message.slice(cursor, match.index)));
+
+        const emote = document.createElement('img');
+        emote.className = 'chat-log-emote';
+        emote.src = `https://files.kick.com/emotes/${match[1]}/fullsize`;
+        emote.alt = `:${match[2]}:`;
+        emote.title = `:${match[2]}:`;
+        emote.onerror = () => {
+          const fallback = document.createTextNode(`:${match[2]}:`);
+          emote.replaceWith(fallback);
+        };
+        container.appendChild(emote);
+        cursor = emotePattern.lastIndex;
+      }
+
+      if (cursor < message.length) container.appendChild(document.createTextNode(message.slice(cursor)));
+    }
+
+    function parseReplyMetadata(message) {
+      let metadata = message?.metadata;
+      if (typeof metadata === 'string') {
+        try { metadata = JSON.parse(metadata); } catch (error) { return null; }
+      }
+      return message?.original_message || metadata?.original_message || null;
+    }
+
+    function getReplyChain(row) {
+      let current = null;
+      try { current = JSON.parse(row.raw_payload || '{}'); } catch (error) { return []; }
+      const chain = [];
+      const seen = new Set();
+      while (current && current.id && !seen.has(current.id)) {
+        chain.unshift(current);
+        seen.add(current.id);
+        current = parseReplyMetadata(current);
+      }
+      return chain;
+    }
+
+    function renderReplyChain(container, chain) {
+      chain.forEach(message => {
+        const item = document.createElement('div');
+        item.className = 'reply-thread-item';
+        const meta = document.createElement('span');
+        meta.className = 'reply-thread-meta';
+        meta.innerText = `${message.sender?.username || message.sender?.slug || 'Unknown user'} · ${formatChartDate(message.created_at)}`;
+        const content = document.createElement('div');
+        appendChatContent(content, message.content || '[non-text message]');
+        item.append(meta, content);
+        container.appendChild(item);
+      });
     }
 
     function searchUser(explicitQuery, pushHistory = true) {
@@ -1075,7 +1161,7 @@
         renderSocialHistory();
 
         const chatStmt = db.prepare(`
-          SELECT m.chat_id, m.content, m.message_type, m.created_at, m.saved_at,
+          SELECT m.chat_id, m.content, m.message_type, m.created_at, m.saved_at, m.raw_payload,
                  c.current_slug AS channel_slug
           FROM chat_messages m
           LEFT JOIN channels c ON c.id = m.chat_id
