@@ -1,10 +1,15 @@
-name: Kick Chat Collector (15 min x3)
+name: Kick Chat Collector (continuous worker)
 
 on:
   schedule:
-    # Every 15 min (reliable tier): each run polls 3x at 5-min spacing,
-    # so chat granularity stays 5 min without relying on flaky */5 cron.
-    - cron: '*/15 * * * *'
+    # Why so few crons: this repo's schedules are only evaluated roughly once
+    # every ~5-6 hours (measured from GitHub's API: the old `0 */6 * * *` cron
+    # fired 180/180 times but each run landed 2-4 HOURS after its expected
+    # minute, while `*/5` and `*/15` produced zero runs). So we trigger rarely
+    # and keep ONE long-running worker alive instead of asking for fast ticks.
+    - cron: '0 */6 * * *'   # proven-reliable anchor
+    - cron: '0 * * * *'     # hourly anchor (best effort)
+    - cron: '*/15 * * * *'  # bonus ticks if the scheduler ever honours them
   workflow_dispatch:
 
 permissions:
@@ -13,6 +18,9 @@ permissions:
 jobs:
   collect-chat:
     runs-on: ubuntu-latest
+    # Hard cap just below GitHub's 6h job limit; the loop stops on its own
+    # budget first so it can always flush a final commit.
+    timeout-minutes: 350
     concurrency:
       group: kick-db-writer
       cancel-in-progress: false
@@ -32,42 +40,83 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
-      - name: Collect Live Chat (3x, 5 min apart)
+      - name: Continuous collection (5 min polls, 3h full refresh)
+        env:
+          POLL_SECONDS: '300'
+          BUDGET_MINUTES: '330'
+          PUSH_EVERY_POLLS: '3'
+          REFRESH_EVERY_POLLS: '36'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
+          sync_to_remote() {
+            # Only reached when a push was rejected. kick_tracker.db is binary and
+            # cannot be merged, so adopt the remote copy and keep going: worst case
+            # we lose the last unpushed window of chat, never the whole worker.
+            git rebase --abort >/dev/null 2>&1 || true
+            git fetch origin main || return 0
+            git reset --hard FETCH_HEAD || return 0
+          }
+
           push_chat_data() {
-            git add -f kick_tracker.db logz.txt
+            git add -f kick_tracker.db logz.txt || return 1
 
             if git diff --staged --quiet; then
-              echo "No changes to push."
+              echo "[push] nothing new to push"
               return 0
             fi
 
-            git commit -m "auto: chat messages update [skip ci]"
+            git commit -m "auto: chat messages update [skip ci]" || return 1
 
-            # Safety net: if main moved while we worked, rebase and retry.
             for attempt in 1 2 3; do
               if git push origin main; then
+                echo "[push] ok (attempt $attempt)"
                 return 0
               fi
-              echo "Push rejected (attempt $attempt). Rebasing onto latest main..."
-              git pull --rebase origin main
+              echo "[push] rejected (attempt $attempt); syncing with origin/main..."
               sleep 5
-              if [ "$attempt" = "3" ]; then
-                echo "Push failed after 3 attempts."
-                return 1
-              fi
+              sync_to_remote
             done
+
+            echo "[push] FAILED after 3 attempts. Continuing to collect (non-fatal)."
+            return 1
           }
 
-          for poll in 1 2 3; do
-            echo "=== Poll $poll of 3 ==="
-            npm run check-streamers
-            push_chat_data || exit 1
-            if [ "$poll" != "3" ]; then
-              echo "Sleeping 5 minutes before next poll..."
-              sleep 300
+          flush_and_exit() {
+            echo "[worker] cancellation/timeout flush..."
+            push_chat_data || true
+            exit 0
+          }
+          trap flush_and_exit TERM INT
+
+          START=$(date +%s)
+          BUDGET=$(( BUDGET_MINUTES * 60 ))
+          poll=0
+
+          while :; do
+            poll=$(( poll + 1 ))
+            elapsed=$(( $(date +%s) - START ))
+            echo "=== poll $poll | elapsed $(( elapsed / 60 ))m of ${BUDGET_MINUTES}m budget ==="
+
+            # Every REFRESH_EVERY_POLLS (~3h) refresh profile data for every channel.
+            if [ "$poll" -gt 1 ] && [ $(( poll % REFRESH_EVERY_POLLS )) -eq 1 ]; then
+              echo "[worker] full profile refresh of every tracked channel"
+              npm run refresh-all || echo "[worker] refresh-all errored; continuing"
             fi
+
+            npm run check-streamers || echo "[worker] check-streamers errored; continuing"
+
+            if [ $(( poll % PUSH_EVERY_POLLS )) -eq 0 ]; then
+              push_chat_data || true
+            fi
+
+            elapsed=$(( $(date +%s) - START ))
+            if [ $(( elapsed + POLL_SECONDS )) -ge "$BUDGET" ]; then
+              echo "[worker] budget reached; final flush, next queued run takes over."
+              push_chat_data || true
+              break
+            fi
+
+            sleep "$POLL_SECONDS"
           done

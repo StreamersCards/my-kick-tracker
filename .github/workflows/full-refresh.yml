@@ -1,9 +1,11 @@
-name: Kick Full User Refresh (3h)
+name: Kick Full User Refresh (manual)
 
 on:
-  schedule:
-    # Every 3 hours: refresh profile data for EVERY user in the DB (followers, bio, socials, ban status).
-    - cron: '7 */3 * * *'
+  # The 3-hourly full refresh now runs INSIDE the chat worker
+  # (.github/workflows/chat-collector.yml) so a single job owns the database and
+  # the two workflows can never fight over the binary kick_tracker.db file.
+  # This workflow stays as a manual escape hatch when you want an immediate
+  # refresh of every tracked channel without waiting for the worker's 3h cycle.
   workflow_dispatch:
 
 permissions:
@@ -12,8 +14,12 @@ permissions:
 jobs:
   refresh-all-users:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Deliberately a separate concurrency group from the chat worker so a manual
+    # click is not stuck behind a ~5.5h worker run. If it overlaps a worker push,
+    # the worker recovers on its own (it re-syncs and keeps collecting).
     concurrency:
-      group: kick-db-writer
+      group: kick-db-writer-refresh
       cancel-in-progress: false
 
     steps:
@@ -48,13 +54,15 @@ jobs:
 
           git commit -m "auto: full user refresh [skip ci]"
 
-          # Safety net: if main moved while we worked, rebase and retry.
+          # Safety net: if main moved while we worked, re-sync and retry.
           for attempt in 1 2 3; do
             if git push origin main; then
               break
             fi
-            echo "Push rejected (attempt $attempt). Rebasing onto latest main..."
-            git pull --rebase origin main
+            echo "Push rejected (attempt $attempt). Syncing with origin/main..."
+            git rebase --abort >/dev/null 2>&1 || true
+            git fetch origin main || true
+            git reset --hard FETCH_HEAD || true
             sleep 5
             if [ "$attempt" = "3" ]; then
               echo "Push failed after 3 attempts."
