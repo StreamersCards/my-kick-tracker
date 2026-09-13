@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
 
   <style>
     :root {
@@ -393,8 +393,8 @@
   <script>
     const TERMS_VERSION = '2026-09-12.2';
     const PRIVACY_VERSION = '2026-09-12.3';
-    const CONSENT_STORAGE_KEY = 'kickintel-consent';
-    let db = null;
+        const CONSENT_STORAGE_KEY = 'kickintel-consent';
+    let apiReady = false;
     let currentFollowerRows = [];
     let currentUsernameRows = [];
     let currentSocialRows = [];
@@ -419,7 +419,7 @@
       const submit = document.getElementById('consentSubmit');
 
       if (consentIsCurrent()) {
-        initDatabase();
+        initApi();
         return;
       }
 
@@ -440,8 +440,8 @@
           return;
         }
         gate.classList.add('hidden');
-        showToast('Agreement saved. Welcome.');
-        initDatabase();
+                showToast('Agreement saved. Welcome.');
+        initApi();
       });
       terms.focus();
     }
@@ -462,26 +462,20 @@
       cursorGlow.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0)`;
     });
 
-    async function initDatabase() {
+        async function initApi() {
       const statusEl = document.getElementById('status');
       try {
-        statusEl.innerText = "Downloading database snapshot...";
-        const SQL = await initSqlJs({
-          locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}`
-        });
+        statusEl.innerText = "Connecting to API...";
+        const response = await fetch('/api/stats', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`API returned ${response.status}`);
 
-        const response = await fetch('kick_tracker.db', { cache: 'no-store' });
-        if (!response.ok) throw new Error("kick_tracker.db not found.");
-
-        const buffer = await response.arrayBuffer();
-        db = new SQL.Database(new Uint8Array(buffer));
-
-        statusEl.innerText = "Database ready. Search any handle above.";
+        apiReady = true;
+        statusEl.innerText = "API ready. Search any handle above.";
         loadHomeStats();
         loadFeaturedGrid();
         checkUrl();
       } catch (err) {
-        statusEl.innerText = `Database Error: ${err.message}`;
+        statusEl.innerText = `API Error: ${err.message}`;
       }
     }
 
@@ -491,17 +485,17 @@
       return Number.isFinite(parsed) ? parsed : 0;
     }
 
-    function loadHomeStats() {
-      if (!db) return;
-      const channelStmt = db.prepare('SELECT COUNT(*) AS count FROM channels');
-      channelStmt.step();
-      document.getElementById('trackedChannelsCount').innerText = Number(channelStmt.getAsObject().count || 0).toLocaleString();
-      channelStmt.free();
-
-      const chatUsersStmt = db.prepare('SELECT COUNT(*) AS count FROM chat_users');
-      chatUsersStmt.step();
-      document.getElementById('chatUsersCount').innerText = Number(chatUsersStmt.getAsObject().count || 0).toLocaleString();
-      chatUsersStmt.free();
+    async function loadHomeStats() {
+      if (!apiReady) return;
+      try {
+        const response = await fetch('/api/stats', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`API returned ${response.status}`);
+        const stats = await response.json();
+        document.getElementById('trackedChannelsCount').innerText = Number(stats.channels || 0).toLocaleString();
+        document.getElementById('chatUsersCount').innerText = Number(stats.chat_users || 0).toLocaleString();
+      } catch (err) {
+        console.error('[loadHomeStats]', err.message);
+      }
     }
 
     let toastTimer = null;
@@ -576,8 +570,8 @@
       document.getElementById('searchInput').value = '';
       document.getElementById('resultCard').classList.add('hidden');
       document.getElementById('featuredSection').classList.remove('hidden');
-      if (db) {
-        document.getElementById('status').innerText = "Database ready. Search any handle above.";
+      if (apiReady) {
+        document.getElementById('status').innerText = "API ready. Search any handle above.";
       }
     }
 
@@ -995,8 +989,8 @@
         featuredEl.classList.add('hidden');
         cardEl.classList.remove('hidden');
 
-        const channel = historyRows[0];
-        const channelId = channel.channel_id;
+        const channel = apiData.channel;
+        const channelId = channel.id;
 
         let rawData = {};
         try {
