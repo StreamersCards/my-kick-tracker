@@ -45,7 +45,7 @@ jobs:
           POLL_SECONDS: '300'
           BUDGET_MINUTES: '330'
           PUSH_EVERY_POLLS: '3'
-          REFRESH_EVERY_POLLS: '36'
+          REFRESH_EVERY_POLLS: '25'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -99,7 +99,8 @@ jobs:
             elapsed=$(( $(date +%s) - START ))
             echo "=== poll $poll | elapsed $(( elapsed / 60 ))m of ${BUDGET_MINUTES}m budget ==="
 
-            # Every REFRESH_EVERY_POLLS (~3h) refresh profile data for every channel.
+            # Every REFRESH_EVERY_POLLS (~2h05m; two per worker run) refresh profile
+            # data for every channel, keeping the global cadence close to 3h.
             if [ "$poll" -gt 1 ] && [ $(( poll % REFRESH_EVERY_POLLS )) -eq 1 ]; then
               echo "[worker] full profile refresh of every tracked channel"
               npm run refresh-all || echo "[worker] refresh-all errored; continuing"
