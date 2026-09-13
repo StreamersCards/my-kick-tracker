@@ -2,6 +2,7 @@
   "name": "kick-username-tracker",
   "version": "1.0.0",
   "main": "tracker.js",
+  "type": "module",
   "scripts": {
     "start": "node tracker.js --monitor",
     "run-once": "node tracker.js",
