@@ -40,12 +40,12 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
-      - name: Continuous collection (5 min polls, 3h full refresh)
+      - name: Continuous collection (1 min polls, 15 min pushes, ~2h full refresh)
         env:
-          POLL_SECONDS: '300'
+          POLL_SECONDS: '60'
           BUDGET_MINUTES: '330'
-          PUSH_EVERY_POLLS: '3'
-          REFRESH_EVERY_POLLS: '25'
+          PUSH_EVERY_POLLS: '15'
+          REFRESH_EVERY_POLLS: '125'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -99,8 +99,8 @@ jobs:
             elapsed=$(( $(date +%s) - START ))
             echo "=== poll $poll | elapsed $(( elapsed / 60 ))m of ${BUDGET_MINUTES}m budget ==="
 
-            # Every REFRESH_EVERY_POLLS (~2h05m; two per worker run) refresh profile
-            # data for every channel, keeping the global cadence close to 3h.
+            # Every REFRESH_EVERY_POLLS (~125 polls ≈ 2h05m; two per worker run) refresh profile
+            # data for every channel, keeping the global cadence close to before.
             if [ "$poll" -gt 1 ] && [ $(( poll % REFRESH_EVERY_POLLS )) -eq 1 ]; then
               echo "[worker] full profile refresh of every tracked channel"
               npm run refresh-all || echo "[worker] refresh-all errored; continuing"
