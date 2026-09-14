@@ -94,6 +94,44 @@ function getChannelLastUpdated(handle) {
   });
 }
 
+function getStats() {
+  return new Promise((resolvePromise, reject) => {
+    const database = new sqlite3.Database(join(__dirname, 'kick_tracker.db'), sqlite3.OPEN_READONLY, (error) => {
+      if (error) reject(error);
+    });
+
+    database.all(`
+      SELECT 'channels' AS metric, COUNT(*) AS value FROM channels
+      UNION ALL
+      SELECT 'chat_users' AS metric, COUNT(*) AS value FROM chat_users
+    `, (error, rows) => {
+      database.close();
+      if (error) reject(error);
+      else {
+        const stats = { channels: 0, chat_users: 0 };
+        for (const row of rows) {
+          if (row.metric === 'channels') stats.channels = Number(row.value) || 0;
+          else if (row.metric === 'chat_users') stats.chat_users = Number(row.value) || 0;
+        }
+        resolvePromise(stats);
+      }
+    });
+  });
+}
+
+async function handleStats(req, res) {
+  if (req.method !== 'GET') {
+    sendJson(res, 405, { error: 'Stats require GET.' });
+    return;
+  }
+  try {
+    const stats = await getStats();
+    sendJson(res, 200, stats);
+  } catch (error) {
+    sendJson(res, 500, { error: 'Could not read stats.' });
+  }
+}
+
 function runRefresh(handle) {
   return new Promise((resolveProcess, reject) => {
     const child = spawn(process.execPath, [join(__dirname, 'tracker.js'), '--refresh', handle], {
@@ -238,6 +276,11 @@ const server = createServer(async (req, res) => {
 
     if (pathname === '/api/refresh') {
       await handleRefresh(req, res, requestUrl);
+      return;
+    }
+
+    if (pathname === '/api/stats') {
+      await handleStats(req, res);
       return;
     }
 
