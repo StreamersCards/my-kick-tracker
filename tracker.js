@@ -423,10 +423,15 @@ async function saveChatHistory(chatId, historyPayload) {
     if (senderId && !uniqueSenders.has(senderId)) uniqueSenders.set(senderId, sender);
   }
 
-  for (const [senderId, sender] of uniqueSenders) {
+  for (const senderId of uniqueSenders.keys()) {
     const existingUser = await getQuery('SELECT user_id FROM chat_users WHERE user_id = ?', [senderId]);
-    await refreshChatUserChannel(sender, senderId);
-    if (!existingUser) discoveredUsers += 1;
+    if (!existingUser) {
+      // Only look up brand-new chatters against the channels API. Re-fetching
+      // every known chatter on every poll caused Kick API 429 rate limits.
+      const sender = uniqueSenders.get(senderId);
+      await refreshChatUserChannel(sender, senderId);
+      discoveredUsers += 1;
+    }
   }
 
   for (const message of messages) {
@@ -495,6 +500,7 @@ async function refreshChatUserChannel(sender, senderId) {
   if (!sender.slug) return Boolean(existingChannel);
 
   try {
+    await throttleKickRequest();
     const response = await fetch(`https://kick.com/api/v1/channels/${encodeURIComponent(sender.slug)}`, {
       headers: { 'User-Agent': 'KickIntel Tracker/1.0', Accept: 'application/json' }
     });
@@ -792,14 +798,38 @@ function getStreamerTags() {
     .filter(target => target && !target.startsWith('#') && !seen.has(target) && seen.add(target));
 }
 
+// Kick API request throttle: keep a minimum gap between requests and back off on 429s.
+const KICK_MIN_REQUEST_GAP_MS = 300;
+let kickLastRequestAt = 0;
+
+async function throttleKickRequest() {
+  const now = Date.now();
+  const waitMs = kickLastRequestAt + KICK_MIN_REQUEST_GAP_MS - now;
+  if (waitMs > 0) await new Promise(resolve => setTimeout(resolve, waitMs));
+  kickLastRequestAt = Date.now();
+}
+
 async function fetchChannelByTag(tag) {
-  const response = await fetch(`https://kick.com/api/v1/channels/${encodeURIComponent(tag)}`, {
-    headers: { 'User-Agent': 'KickIntel Tracker/1.0', Accept: 'application/json' }
-  });
-  if (!response.ok) throw new Error(`Kick API returned ${response.status}`);
-  const payload = await response.json();
-  if (!payload?.id) throw new Error('Kick returned an invalid channel payload');
-  return payload;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await throttleKickRequest();
+    const response = await fetch(`https://kick.com/api/v1/channels/${encodeURIComponent(tag)}`, {
+      headers: { 'User-Agent': 'KickIntel Tracker/1.0', Accept: 'application/json' }
+    });
+    if (response.ok) {
+      const payload = await response.json();
+      if (!payload?.id) throw new Error('Kick returned an invalid channel payload');
+      return payload;
+    }
+    // Rate limited: wait and retry before giving up on this tag.
+    if (response.status === 429 && attempt < maxAttempts) {
+      const backoffMs = attempt * 5000;
+      console.warn(`[RATE] @${tag}: 429 from Kick API, retrying in ${backoffMs / 1000}s...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+      continue;
+    }
+    throw new Error(`Kick API returned ${response.status}`);
+  }
 }
 
 async function monitorTargets() {
@@ -844,6 +874,8 @@ async function checkStreamerTagsOnce(shouldStop = () => false) {
     } catch (error) {
       console.warn(`[MONITOR] @${tag}: ${error.message}`);
     }
+    // Small pause to stay friendly to the Kick API.
+    await new Promise(resolve => setTimeout(resolve, 400));
   }
 }
 

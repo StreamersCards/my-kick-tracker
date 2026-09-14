@@ -169,6 +169,15 @@
     .load-more-btn:hover { border-color: var(--accent-blue); background: rgba(0, 240, 255, 0.06); }
     .empty-state { color: var(--text-muted); font-size: 0.85rem; padding: 14px 2px; }
     .chat-log-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .chat-filter-bar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .chat-filter-bar select { background: #111722; color: var(--text-main); border: 1px solid var(--card-border); border-radius: 10px; padding: 9px 12px; font-size: 0.85rem; max-width: 220px; }
+    .chat-filter-bar select:focus { outline: none; border-color: var(--kick-green); }
+    .chat-filter-bar input { flex: 1; min-width: 160px; background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 10px; padding: 9px 14px; color: var(--text-main); font-size: 0.85rem; }
+    .chat-filter-bar input:focus { outline: none; border-color: var(--accent-blue); }
+    .chat-filter-bar input::placeholder { color: var(--text-muted); }
+    .chat-stream-divider { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; color: var(--accent-blue); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .chat-stream-divider::before, .chat-stream-divider::after { content: ''; flex: 1; height: 1px; background: rgba(0, 240, 255, 0.35); }
+    .chat-stream-divider span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
     .chat-log-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 12px 14px; }
     .chat-log-content { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; color: var(--text-main); line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
     .chat-log-emote { width: 28px; height: 28px; object-fit: contain; vertical-align: middle; }
@@ -377,6 +386,12 @@
       <div class="history-actions"><button id="socialMoreBtn" class="load-more-btn hidden" type="button">Load more changes</button></div>
 
       <div class="section-title" style="margin-top: 30px;">Chat History</div>
+      <div class="chat-filter-bar">
+        <select id="chatStreamFilter" title="Filter by streamer">
+          <option value="all">All streamers</option>
+        </select>
+        <input id="chatSearchInput" type="search" placeholder="Search messages or senders..." autocomplete="off">
+      </div>
       <ul id="chatTimeline" class="chat-log-list"></ul>
       <div class="history-actions"><button id="chatMoreBtn" class="load-more-btn hidden" type="button">Load more messages</button></div>
     </div>
@@ -837,10 +852,40 @@
       moreButton.classList.toggle('hidden', socialVisibleCount >= filteredRows.length);
     }
 
+    function getFilteredChatRows() {
+      const streamFilter = document.getElementById('chatStreamFilter').value;
+      const query = document.getElementById('chatSearchInput').value.trim().toLowerCase();
+      return currentChatRows.filter(row => {
+        if (streamFilter !== 'all' && String(row.chat_id) !== streamFilter) return false;
+        if (query) {
+          const content = String(row.content || '').toLowerCase();
+          const sender = String(row.sender_username || row.sender_slug || '').toLowerCase();
+          if (!content.includes(query) && !sender.includes(query)) return false;
+        }
+        return true;
+      });
+    }
+
+    function populateChatStreamFilter() {
+      const select = document.getElementById('chatStreamFilter');
+      const previous = select.value;
+      const streams = new Map();
+      currentChatRows.forEach(row => {
+        const key = String(row.chat_id);
+        if (!streams.has(key)) streams.set(key, row.channel_slug || `channel ${row.chat_id}`);
+      });
+      select.innerHTML = '<option value="all">All streamers</option>' + [...streams.entries()]
+        .map(([key, name]) => `<option value="${key}">@${String(name).replace(/^@/, '')}</option>`)
+        .join('');
+      if (previous && [...select.options].some(option => option.value === previous)) select.value = previous;
+    }
+
     function renderChatHistory() {
       const chatTimeline = document.getElementById('chatTimeline');
       const moreButton = document.getElementById('chatMoreBtn');
       chatTimeline.innerHTML = '';
+
+      const filteredRows = getFilteredChatRows();
 
       if (currentChatRows.length === 0) {
         chatTimeline.innerHTML = '<li class="empty-state">No saved chat messages for this user.</li>';
@@ -848,7 +893,26 @@
         return;
       }
 
-      currentChatRows.slice(0, chatVisibleCount).forEach(row => {
+      if (filteredRows.length === 0) {
+        chatTimeline.innerHTML = '<li class="empty-state">No chat messages match the current filter.</li>';
+        moreButton.classList.add('hidden');
+        return;
+      }
+
+      let previousChatId = null;
+      filteredRows.slice(0, chatVisibleCount).forEach(row => {
+        // Visual border/divider when the chat switches to a different streamer.
+        const chatId = String(row.chat_id);
+        if (previousChatId !== null && chatId !== previousChatId) {
+          const divider = document.createElement('li');
+          divider.className = 'chat-stream-divider';
+          const label = document.createElement('span');
+          label.innerText = `@${String(row.channel_slug || `channel ${row.chat_id}`).replace(/^@/, '')}`;
+          divider.appendChild(label);
+          chatTimeline.appendChild(divider);
+        }
+        previousChatId = chatId;
+
         const item = document.createElement('li');
         item.className = 'chat-log-item';
 
@@ -890,7 +954,7 @@
         }
         chatTimeline.appendChild(item);
       });
-      moreButton.classList.toggle('hidden', chatVisibleCount >= currentChatRows.length);
+      moreButton.classList.toggle('hidden', chatVisibleCount >= filteredRows.length);
     }
 
     function appendChatContent(container, message) {
@@ -1182,6 +1246,7 @@
 
         const chatStmt = db.prepare(`
           SELECT m.chat_id, m.content, m.message_type, m.created_at, m.saved_at, m.raw_payload,
+                 m.sender_slug, m.sender_username,
                  c.current_slug AS channel_slug
           FROM chat_messages m
           LEFT JOIN channels c ON c.id = m.chat_id
@@ -1193,6 +1258,7 @@
         while (chatStmt.step()) currentChatRows.push(chatStmt.getAsObject());
         chatStmt.free();
         chatVisibleCount = 20;
+        populateChatStreamFilter();
         renderChatHistory();
 
         const followerHistoryQuery = `SELECT followers_count, recorded_at FROM follower_history WHERE channel_id = ? ORDER BY recorded_at ASC`;
@@ -1229,6 +1295,18 @@
       document.getElementById('chatMoreBtn').addEventListener('click', () => {
         chatVisibleCount += 20;
         renderChatHistory();
+      });
+      document.getElementById('chatStreamFilter').addEventListener('change', () => {
+        chatVisibleCount = 20;
+        renderChatHistory();
+      });
+      let chatSearchTimer = null;
+      document.getElementById('chatSearchInput').addEventListener('input', () => {
+        clearTimeout(chatSearchTimer);
+        chatSearchTimer = setTimeout(() => {
+          chatVisibleCount = 20;
+          renderChatHistory();
+        }, 150);
       });
       document.getElementById('searchInput').addEventListener('keypress', (e) => { 
         if (e.key === 'Enter') searchUser(null, true); 
