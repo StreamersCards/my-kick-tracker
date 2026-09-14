@@ -395,6 +395,7 @@
     const PRIVACY_VERSION = '2026-09-12.3';
         const CONSENT_STORAGE_KEY = 'kickintel-consent';
     let apiReady = false;
+    let db = null;
     let currentFollowerRows = [];
     let currentUsernameRows = [];
     let currentSocialRows = [];
@@ -465,12 +466,13 @@
         async function initApi() {
       const statusEl = document.getElementById('status');
       try {
-        statusEl.innerText = "Connecting to API...";
-        const response = await fetch('/api/stats', { cache: 'no-store' });
-        if (!response.ok) throw new Error(`API returned ${response.status}`);
-
+        statusEl.innerText = "Loading database...";
+        const SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}` });
+        const response = await fetch('./kick_tracker.db', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Database unavailable.');
+        db = new SQL.Database(new Uint8Array(await response.arrayBuffer()));
         apiReady = true;
-        statusEl.innerText = "API ready. Search any handle above.";
+        statusEl.innerText = "Ready. Search any handle above.";
         loadHomeStats();
         loadFeaturedGrid();
         checkUrl();
@@ -485,14 +487,20 @@
       return Number.isFinite(parsed) ? parsed : 0;
     }
 
-    async function loadHomeStats() {
+    function getTableCount(table) {
+      if (!db) return 0;
+      const stmt = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`);
+      stmt.step();
+      const row = stmt.getAsObject();
+      stmt.free();
+      return Number(row.n) || 0;
+    }
+
+    function loadHomeStats() {
       if (!apiReady) return;
       try {
-        const response = await fetch('/api/stats', { cache: 'no-store' });
-        if (!response.ok) throw new Error(`API returned ${response.status}`);
-        const stats = await response.json();
-        document.getElementById('trackedChannelsCount').innerText = Number(stats.channels || 0).toLocaleString();
-        document.getElementById('chatUsersCount').innerText = Number(stats.chat_users || 0).toLocaleString();
+        document.getElementById('trackedChannelsCount').innerText = getTableCount('channels').toLocaleString();
+        document.getElementById('chatUsersCount').innerText = getTableCount('chat_users').toLocaleString();
       } catch (err) {
         console.error('[loadHomeStats]', err.message);
       }
@@ -989,7 +997,18 @@
         featuredEl.classList.add('hidden');
         cardEl.classList.remove('hidden');
 
-        const channel = apiData.channel;
+        const chStmt = db.prepare('SELECT * FROM channels WHERE id = ?');
+        chStmt.bind([historyRows[0].channel_id]);
+        const channel = chStmt.step() ? chStmt.getAsObject() : {};
+        chStmt.free();
+
+        if (!channel || !channel.id) {
+          statusEl.innerText = `No records found for handle: "${queryHandle}"`;
+          showToast('No records found for that handle.');
+          cardEl.classList.add('hidden');
+          featuredEl.classList.remove('hidden');
+          return;
+        }
         const channelId = channel.id;
 
         let rawData = {};
