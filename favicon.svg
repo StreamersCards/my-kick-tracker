@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="KickIntel">
+  <rect width="512" height="512" rx="96" fill="#07090e"/>
+  <!-- Magnifying lens -->
+  <circle cx="224" cy="248" r="118" fill="none" stroke="#53fc18" stroke-width="24" stroke-opacity="0.85"/>
+  <!-- Lens handle -->
+  <rect x="326" y="338" width="24" height="136" rx="12" fill="#53fc18" transform="rotate(45 338 406)"/>
+  <!-- Play triangle inside the lens -->
+  <path d="M178 184 L242 234 L242 332 L178 382 Z" fill="#53fc18"/>
+</svg>

@@ -1,0 +1,21 @@
+{
+  "name": "KickIntel — Kick Intelligence Tracker",
+  "short_name": "KickIntel",
+  "description": "Audit historical Kick channel handles, social changes, follower history, and public chat.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07090e",
+  "theme_color": "#07090e",
+  "icons": [
+    {
+      "src": "favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

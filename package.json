@@ -9,7 +9,9 @@
     "check-streamers": "node tracker.js --check-streamers",
     "refresh-all": "node tracker.js --refresh-all",
     "monitor": "node tracker.js --monitor",
-    "serve": "node server.js"
+    "serve": "node server.js",
+    "gen-icons": "node generate-icons.js",
+    "postinstall": "node generate-icons.js || true"
   },
   "dependencies": {
     "puppeteer": "^22.0.0",

@@ -4,3 +4,11 @@ node_modules/
 .refresh-rate-limit.json
 backups/
 .wrangler
+
+# Generated favicon PNGs (regenerated via `npm run gen-icons` from favicon.svg)
+favicon-16x16.png
+favicon-32x32.png
+favicon-48x48.png
+favicon-180.png
+favicon-192.png
+favicon-512.png

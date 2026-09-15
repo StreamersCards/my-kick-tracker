@@ -27,7 +27,8 @@ const mimeTypes = {
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
-  '.txt': 'text/plain; charset=utf-8'
+  '.txt': 'text/plain; charset=utf-8',
+  '.webmanifest': 'application/manifest+json'
 };
 
 async function serveFile(filePath, res) {
@@ -300,6 +301,13 @@ const server = createServer(async (req, res) => {
     }
 
     if (pathname === '/privacy.html' || pathname === '/terms.html') {
+      await serveFile(pathname.slice(1), res);
+      return;
+    }
+
+    // Favicon & PWA asset files
+    const staticAssetFiles = ['favicon.svg', 'favicon-16x16.png', 'favicon-32x32.png', 'favicon-180.png', 'favicon-192.png', 'favicon-512.png', 'site.webmanifest'];
+    if (staticAssetFiles.some(f => pathname === `/${f}`)) {
       await serveFile(pathname.slice(1), res);
       return;
     }
