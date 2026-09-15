@@ -45,6 +45,17 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
+          # Same guard as the chat worker: GitHub rejects any push that contains a
+          # file larger than 100 MiB, so compact the tracked database first.
+          npm run prune || echo "[prune] maintenance reported a problem; continuing"
+
+          DB_BYTES=$(stat -c%s kick_tracker.db 2>/dev/null || echo 0)
+          echo "[push] kick_tracker.db is $(( DB_BYTES / 1024 / 1024 )) MiB"
+          if [ "$DB_BYTES" -ge 104857600 ]; then
+            echo "Database exceeds GitHub's 100 MiB per-file push limit; aborting the push."
+            exit 1
+          fi
+
           git add -f kick_tracker.db
 
           if git diff --staged --quiet; then

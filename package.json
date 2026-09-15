@@ -8,6 +8,7 @@
     "run-once": "node tracker.js",
     "check-streamers": "node tracker.js --check-streamers",
     "refresh-all": "node tracker.js --refresh-all",
+    "prune": "node tracker.js --prune",
     "monitor": "node tracker.js --monitor",
     "serve": "node server.js",
     "gen-icons": "node generate-icons.js",

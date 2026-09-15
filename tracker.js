@@ -144,6 +144,12 @@ async function initDb() {
       )
     `);
 
+    // Retention windows and the size cap walk chat_messages in saved_at order,
+    // so keep a cheap index for the prunes done by runChatStorageMaintenance().
+    await runQuery(`
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_saved_at ON chat_messages (saved_at)
+    `);
+
     await runQuery(`
       INSERT INTO follower_history (channel_id, followers_count, recorded_at)
       SELECT c.id, COALESCE(c.followers_count, 0), CURRENT_TIMESTAMP
@@ -411,6 +417,64 @@ function isLiveChannelPayload(data) {
   return liveFlag === true || liveFlag === 1 || Boolean(liveTitle) || Boolean(livestream && liveFlag !== false && liveFlag !== 0);
 }
 
+// Kick sends a reply as a fat `metadata` JSON *string* that re-serialises the
+// quoted message (sender identity, badges, emote images...) and repeats itself
+// for every reply level. On top of that the tracker used to store the same
+// quoted message a second time as a nested `original_message` object, which made
+// an average reply row ~6.8 KB instead of ~0.4 KB. That duplication alone was
+// ~75 MB of kick_tracker.db and pushed the file over GitHub's 100 MiB per-file
+// push limit, which silently broke every auto-cycle push (see the note on
+// runChatStorageMaintenance).
+// The site only renders id / content / created_at / sender.username|slug plus the
+// reply chain (index.html: getReplyChain + parseReplyMetadata), so only those
+// survive here.
+// Safety net only: the site renders the whole embedded reply thread (~30 levels
+// deep in real data), so this is deliberately generous. Cycles are already
+// stopped by the `seen` id set, matching index.html getReplyChain().
+const CHAT_REPLY_MAX_DEPTH = 200;
+
+function pickChatReplySource(message) {
+  if (!message || typeof message !== 'object') return null;
+  if (message.original_message) return message.original_message;
+
+  const metadata = message.metadata;
+  if (metadata && typeof metadata === 'object') return metadata.original_message || null;
+  if (typeof metadata === 'string') {
+    try {
+      return JSON.parse(metadata)?.original_message || null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function slimChatMessage(message, depth = 0, seen = new Set()) {
+  if (!message || typeof message !== 'object') return null;
+  const id = message.id || null;
+  if (!id || seen.has(id)) return null;
+  seen.add(id);
+
+  const sender = message.sender || {};
+  const slim = {
+    id,
+    content: message.content || '',
+    created_at: message.created_at || null,
+    sender: {
+      id: Number(sender.id ?? message.user_id) || null,
+      username: sender.username || null,
+      slug: sender.slug || null,
+    },
+  };
+
+  const replySource = depth < CHAT_REPLY_MAX_DEPTH ? pickChatReplySource(message) : null;
+  const slimReply = replySource ? slimChatMessage(replySource, depth + 1, seen) : null;
+  if (slimReply) slim.original_message = slimReply;
+
+  return slim;
+}
+
 async function saveChatHistory(chatId, historyPayload) {
   const messages = Array.isArray(historyPayload?.data?.messages) ? historyPayload.data.messages : [];
   let savedMessages = 0;
@@ -452,23 +516,11 @@ async function saveChatHistory(chatId, historyPayload) {
     }
 
     if (!message.id) continue;
-    // Slim chat payload: keep only the reply-chain fields the frontend renders
-    // (getReplyChain/parseReplyMetadata). Drops the sender-identity echo (~700B → ~100B).
-    // NOTE: chat_users.raw_identity keeps the full sender object (one row per user, tiny).
-    const replySource = message.original_message
-      || (typeof message.metadata === 'object' && message.metadata !== null ? message.metadata.original_message : null)
-      || (() => { try {
-        const meta = typeof message.metadata === 'string' ? JSON.parse(message.metadata) : null;
-        return meta?.original_message || null;
-      } catch { return null; } })();
-    const slimChatPayload = JSON.stringify({
-      id: message.id,
-      content: message.content || '',
-      created_at: message.created_at || null,
-      sender: { id: senderId, username: sender.username || null, slug: sender.slug || null },
-      ...(replySource ? { original_message: replySource } : {}),
-      ...(typeof message.metadata === 'string' ? { metadata: message.metadata } : {}),
-    });
+    // Slim reply-aware payload: everything the site's chat renderer needs and
+    // nothing else (identity/badges/metadata echoes are dropped).
+    const slimMessage = slimChatMessage(message);
+    if (!slimMessage) continue;
+    const slimChatPayload = JSON.stringify(slimMessage);
     const result = await runQuery(`
       INSERT OR IGNORE INTO chat_messages (
         message_id, chat_id, sender_user_id, sender_slug, sender_username,
@@ -532,9 +584,30 @@ async function fetchLiveChatHistory(data) {
   return saveChatHistory(chatId, payload);
 }
 
+const CHAT_LOG_PATH = './logz.txt';
+const CHAT_LOG_MAX_BYTES = Number.parseInt(process.env.CHAT_LOG_MAX_BYTES ?? '5242880', 10);
+const CHAT_LOG_KEEP_LINES = Number.parseInt(process.env.CHAT_LOG_KEEP_LINES ?? '20000', 10);
+
+// logz.txt is committed on every push too, so trim it instead of letting it
+// grow forever (it was already past 2.4 MB when the pushes started failing).
+function rotateChatLogIfNeeded() {
+  try {
+    if (fs.statSync(CHAT_LOG_PATH).size <= CHAT_LOG_MAX_BYTES) return;
+    const kept = fs.readFileSync(CHAT_LOG_PATH, 'utf8')
+      .split('\n')
+      .filter(line => line.length > 0)
+      .slice(-CHAT_LOG_KEEP_LINES)
+      .join('\n');
+    fs.writeFileSync(CHAT_LOG_PATH, `${new Date().toISOString()} [Chat][Log] rotated - kept the newest ${CHAT_LOG_KEEP_LINES} lines\n${kept}\n`, 'utf8');
+  } catch (error) {
+    console.warn('[Chat] Could not rotate logz.txt:', error.message);
+  }
+}
+
 function appendChatLog(tag, message) {
   const timestamp = new Date().toISOString();
-  fs.appendFileSync('./logz.txt', `${timestamp} [Chat][${tag}] ${message}\n`, 'utf8');
+  fs.appendFileSync(CHAT_LOG_PATH, `${timestamp} [Chat][${tag}] ${message}\n`, 'utf8');
+  rotateChatLogIfNeeded();
 }
 
 async function collectAndLogChat(data, fallbackTag) {
@@ -660,7 +733,181 @@ async function refreshAllTrackedUsers() {
     await new Promise(resolve => setTimeout(resolve, 400));
   }
 
+  // Compact the tracked database before this run commits it to git.
+  await runChatStorageMaintenance();
+
   console.log(`[REFRESH-ALL] Done. Updated: ${ok}, failed: ${failed}.`);
+}
+
+// --- Chat storage maintenance -------------------------------------------------
+// kick_tracker.db is committed to git on every push, so it must stay well below
+// GitHub's hard per-file limit ("GitHub blocks files larger than 100 MiB",
+// 104 857 600 bytes). On 2026-09-15 the file reached 104 435 712 bytes (99.6 MiB)
+// and then crossed that limit a few minutes later, at which point GitHub started
+// rejecting EVERY push. The worker kept collecting, the job still finished
+// "successfully" (pushes are non-fatal on purpose), and nothing reached
+// origin/main again - which looks exactly like "the auto cycle can't push".
+// This maintenance pass keeps the tracked file comfortably small:
+//   1. migrates legacy fat chat payloads to the slim shape above,
+//   2. drops chat messages past the retention window,
+//   3. enforces a hard size cap (oldest messages first) with a VACUUM.
+const GITHUB_FILE_SIZE_LIMIT_BYTES = 100 * 1024 * 1024;
+const DATABASE_PATH = './kick_tracker.db';
+const MAINTENANCE_STATE_PATH = './.chat-maintenance.json';
+const CHAT_RETENTION_DAYS = Number.parseInt(process.env.CHAT_RETENTION_DAYS ?? '7', 10);
+const CHAT_MAX_DB_BYTES = Math.max(1, Number.parseFloat(process.env.CHAT_MAX_DB_MB ?? '70')) * 1024 * 1024;
+const PAYLOAD_MIGRATION_INTERVAL_MS = 15 * 60 * 1000;
+const VACUUM_MIN_RECLAIM_BYTES = 4 * 1024 * 1024;
+
+function getDatabaseSizeBytes() {
+  try {
+    return fs.statSync(DATABASE_PATH).size;
+  } catch {
+    return 0;
+  }
+}
+
+function formatMiB(bytes) {
+  return `${(bytes / 1048576).toFixed(1)} MiB`;
+}
+
+function readMaintenanceState() {
+  try {
+    return JSON.parse(fs.readFileSync(MAINTENANCE_STATE_PATH, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function writeMaintenanceState(state) {
+  try {
+    fs.writeFileSync(MAINTENANCE_STATE_PATH, JSON.stringify(state), 'utf8');
+  } catch (error) {
+    console.warn('[DB] Could not persist maintenance state:', error.message);
+  }
+}
+
+async function getReclaimableBytes() {
+  try {
+    const pageCount = Number((await getQuery('PRAGMA page_count'))?.page_count) || 0;
+    const freePages = Number((await getQuery('PRAGMA freelist_count'))?.freelist_count) || 0;
+    const pageSize = Number((await getQuery('PRAGMA page_size'))?.page_size) || 4096;
+    return Math.min(freePages * pageSize, pageCount * pageSize);
+  } catch {
+    return 0;
+  }
+}
+
+async function vacuumDatabase() {
+  await runQuery('VACUUM');
+}
+
+async function migrateLegacyChatPayloads() {
+  const rows = await allQuery(`
+    SELECT rowid AS row_id, raw_payload
+    FROM chat_messages
+    WHERE raw_payload LIKE '%"metadata"%' OR LENGTH(raw_payload) > 400
+  `);
+
+  let migrated = 0;
+  // Batched inside transactions on purpose: 77k single-row commits means one
+  // journal write each, which took minutes and would make the per-poll and
+  // pre-push maintenance calls useless.
+  await runQuery('BEGIN');
+  try {
+    for (const row of rows) {
+      let slim = null;
+      try {
+        slim = JSON.stringify(slimChatMessage(JSON.parse(row.raw_payload)));
+      } catch {
+        continue;
+      }
+      if (!slim || slim === 'null' || slim.length >= String(row.raw_payload).length) continue;
+      await runQuery('UPDATE chat_messages SET raw_payload = ? WHERE rowid = ?', [slim, row.row_id]);
+      migrated += 1;
+      if (migrated % 10000 === 0) {
+        await runQuery('COMMIT');
+        await runQuery('BEGIN');
+      }
+    }
+    await runQuery('COMMIT');
+  } catch (error) {
+    try { await runQuery('COMMIT'); } catch { /* transaction already closed */ }
+    throw error;
+  }
+
+  return migrated;
+}
+
+async function pruneChatMessagesByAge(retentionDays) {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) return 0;
+  const result = await runQuery(
+    "DELETE FROM chat_messages WHERE saved_at < datetime('now', ?)",
+    [`-${retentionDays} day`]
+  );
+  return result?.changes || 0;
+}
+
+async function enforceChatSizeCap(maxBytes) {
+  let deleted = 0;
+  let size = getDatabaseSizeBytes();
+
+  for (let pass = 0; pass < 4 && size > maxBytes; pass += 1) {
+    const total = Number((await getQuery('SELECT COUNT(*) AS total FROM chat_messages'))?.total) || 0;
+    if (total === 0) break;
+
+    const bytesPerRow = Math.max(1, Math.floor(size / total));
+    const overBy = size - maxBytes;
+    const batch = Math.min(total, Math.ceil(overBy / bytesPerRow) + 500);
+
+    const result = await runQuery(`
+      DELETE FROM chat_messages WHERE rowid IN (
+        SELECT rowid FROM chat_messages ORDER BY saved_at ASC, rowid ASC LIMIT ?
+      )
+    `, [batch]);
+    if (!result?.changes) break;
+
+    deleted += result.changes;
+    await vacuumDatabase();
+    size = getDatabaseSizeBytes();
+  }
+
+  return deleted;
+}
+
+async function runChatStorageMaintenance({ force = false, quiet = false } = {}) {
+  const startedAt = Date.now();
+  const before = getDatabaseSizeBytes();
+  const state = readMaintenanceState();
+
+  let migrated = 0;
+  // The legacy-payload scan is a full table scan, so only pay for it on a
+  // forced run (npm run prune) or every PAYLOAD_MIGRATION_INTERVAL_MS.
+  if (force || (startedAt - (Number(state.payloadMigrationAt) || 0)) >= PAYLOAD_MIGRATION_INTERVAL_MS) {
+    migrated = await migrateLegacyChatPayloads();
+    writeMaintenanceState({ ...state, payloadMigrationAt: startedAt });
+  }
+
+  const aged = await pruneChatMessagesByAge(CHAT_RETENTION_DAYS);
+  const reclaimable = await getReclaimableBytes();
+  if ((migrated > 0 || aged > 0) && reclaimable >= VACUUM_MIN_RECLAIM_BYTES) {
+    await vacuumDatabase();
+  }
+
+  let capped = 0;
+  if (getDatabaseSizeBytes() > CHAT_MAX_DB_BYTES) {
+    capped = await enforceChatSizeCap(CHAT_MAX_DB_BYTES);
+  }
+
+  const after = getDatabaseSizeBytes();
+  if (!quiet && (migrated > 0 || aged > 0 || capped > 0)) {
+    console.log(
+      `[DB] chat storage: slimmed ${migrated} legacy payload(s), pruned ${aged} message(s) past ${CHAT_RETENTION_DAYS}d retention, ` +
+      `pruned ${capped} message(s) over the ${formatMiB(CHAT_MAX_DB_BYTES)} cap; ${formatMiB(before)} -> ${formatMiB(after)}`
+    );
+  }
+
+  return { migrated, aged, capped, before, after, overPushLimit: after > GITHUB_FILE_SIZE_LIMIT_BYTES };
 }
 
 async function main() {
@@ -669,6 +916,17 @@ async function main() {
   if (process.argv[2] === '--backfill-snapshots') {
     console.log('[DB] Missing current follower snapshots backfilled without fetching targets.');
     db.close();
+    return;
+  }
+
+  if (process.argv[2] === '--prune') {
+    const result = await runChatStorageMaintenance({ force: true });
+    const status = result.overPushLimit
+      ? 'OVER GitHub\'s 100 MiB per-file push limit'
+      : 'within GitHub\'s 100 MiB per-file push limit';
+    console.log(`[DB] kick_tracker.db is ${formatMiB(result.after)} (${status})`);
+    db.close();
+    if (result.overPushLimit) process.exitCode = 1;
     return;
   }
 
@@ -876,6 +1134,14 @@ async function checkStreamerTagsOnce(shouldStop = () => false) {
     }
     // Small pause to stay friendly to the Kick API.
     await new Promise(resolve => setTimeout(resolve, 400));
+  }
+
+  // Runs after every poll cycle: cheap (indexed prune, no VACUUM unless rows
+  // were actually freed) and keeps skirting GitHub's 100 MiB per-file push limit.
+  try {
+    await runChatStorageMaintenance();
+  } catch (error) {
+    console.warn('[DB] chat storage maintenance failed:', error.message);
   }
 }
 

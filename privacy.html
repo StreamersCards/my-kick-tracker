@@ -77,7 +77,8 @@
     <p>Public data may be used to show channel summaries, follower histories, profile metadata, public chat history, and historical records on this site. The site does not require login or account access.</p>
 
     <h2>Retention</h2>
-    <p>Public profile and chat records may be retained as historical logs so changes and activity can be reviewed over time. Historical records are not automatically overwritten when newer data is collected.</p>
+    <p>Public profile records, usernames, social links, and follower history are retained as historical logs so changes and activity can be reviewed over time, and are not automatically overwritten when newer data is collected.</p>
+    <p>Public chat messages are kept for a rolling window (7 days by default) and on a rolling size budget so the database stays small enough to be published and loaded by the site; older chat messages are permanently deleted once they fall outside that window.</p>
 
     <h2>Cookies and tracking</h2>
     <p>This site does not require cookies for core functionality and does not use invasive tracking or advertising scripts for user profiling.</p>
